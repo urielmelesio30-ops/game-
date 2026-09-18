@@ -11,7 +11,7 @@
 const LANES = [-2.2, 0, 2.2];
 const FORWARD_SPEED = 11;
 const LANE_LERP = 0.18;
-const LEVEL_END_Z = -600;
+const LEVEL_END_Z = -800;
 const WORLD_START_Z = 30;
 const MAX_DISPLAY = 130; // sprite cap for perf; real squad count is uncapped in math
 const FAR_CLIP = 340; // max render distance
@@ -105,9 +105,18 @@ function boxCorners(cx, cy, cz, hw, hh, hd) {
   ];
 }
 
-function shadeColor(hex, factor) {
-  const n = parseInt(hex.slice(1), 16);
-  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+// Accepts either '#rrggbb' or an 'rgb(r,g,b)' string — callers sometimes
+// pre-tint a color (itself via shadeColor) before it reaches the 3D
+// engine's own per-face lighting pass, so this must tolerate its own output.
+function shadeColor(color, factor) {
+  let r, g, b;
+  if (color.charCodeAt(0) === 35 /* '#' */) {
+    const n = parseInt(color.slice(1), 16);
+    r = (n >> 16) & 255; g = (n >> 8) & 255; b = n & 255;
+  } else {
+    const m = color.match(/[\d.]+/g);
+    r = +m[0]; g = +m[1]; b = +m[2];
+  }
   r = Math.max(0, Math.min(255, Math.round(r * factor)));
   g = Math.max(0, Math.min(255, Math.round(g * factor)));
   b = Math.max(0, Math.min(255, Math.round(b * factor)));
@@ -198,7 +207,7 @@ function pushPanelFace(out, actor, part) {
 }
 
 // Draws a full actor (array of box/disc/panel parts) as a depth-sorted face list.
-function drawActor3D(actor, parts) {
+function drawActor3D(actor, parts, opts) {
   const faces = [];
   for (const part of parts) {
     if (part.kind === 'disc') pushDiscFace(faces, actor, part);
@@ -206,6 +215,7 @@ function drawActor3D(actor, parts) {
     else pushBoxFaces(faces, actor, part);
   }
   faces.sort((a, b) => b.depth - a.depth); // farthest first (painter's algorithm)
+  const outline = opts && opts.outline;
   for (const f of faces) {
     ctx.beginPath();
     ctx.moveTo(f.pts[0].sx, f.pts[0].sy);
@@ -218,6 +228,14 @@ function drawActor3D(actor, parts) {
     } else {
       ctx.fillStyle = f.color;
       ctx.fill();
+      if (outline) {
+        // a crisp dark rim per face — the cheapest way to keep each warrior
+        // reading as a distinct silhouette even when packed shoulder to
+        // shoulder in a big phalanx
+        ctx.strokeStyle = 'rgba(24,16,10,0.45)';
+        ctx.lineWidth = Math.max(0.6, f.pts[0].scale * 0.014);
+        ctx.stroke();
+      }
     }
   }
 }
@@ -238,6 +256,37 @@ const COL = {
   heroCrest: '#f6f1e2', enemyCrest: '#1c1c1c',
   laurel: '#5a8a4a',
 };
+
+// Night palette — blended in with COL as the run progresses toward Ares.
+const NIGHT = {
+  sky1: '#2a3a6b', sky2: '#141c42', sky3: '#080b22',
+  fog: '#232f5c',
+  sand1: '#4a4560', sand2: '#302c48',
+  mtn1: '#2c3660', mtn2: '#1c2444',
+};
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+function lerpColor(hexA, hexB, t) {
+  if (t <= 0) return hexA;
+  if (t >= 1) return hexB;
+  const a = hexToRgb(hexA), b = hexToRgb(hexB);
+  const r = Math.round(a[0] + (b[0] - a[0]) * t);
+  const g = Math.round(a[1] + (b[1] - a[1]) * t);
+  const bl = Math.round(a[2] + (b[2] - a[2]) * t);
+  return `rgb(${r},${g},${bl})`;
+}
+
+// 0 = full day, 1 = full night — day holds through acts 1-2, dusk creeps in
+// around Talos (act 3), and it's fully dark by the time Ares appears.
+function computeDayT(z) {
+  if (z >= -400) return 0;
+  if (z >= -600) return ((-400 - z) / 200) * 0.4;
+  if (z >= -750) return 0.4 + ((-600 - z) / 150) * 0.6;
+  return 1;
+}
 
 // ---------- Progression: weapons, armor, enemy types, boss themes ----------
 // Weapon tier: raises effective offense (player.count * power) in combat
@@ -271,6 +320,13 @@ const HERO_VARIANTS = [
 // Enemy variety: a power multiplier (effective threat) plus a visual profile
 // — a rival dark-caped warband, same Spartan rig, different colors per type.
 const ENEMY_TYPES = {
+  minimo: {
+    power: 0.45, sizeMult: 0.62, label: 'Recluta', metal: '#a0a5a8', metalDark: '#686d70',
+    variants: [
+      { skin: '#b98a70', skinDark: '#7a5640', cape: '#707070', crest: '#b0b0b0' },
+      { skin: '#ac7d64', skinDark: '#6e4c38', cape: '#606060', crest: '#c0c0c0' },
+    ],
+  },
   debil: {
     power: 0.7, sizeMult: 0.85, label: 'Explorador', metal: '#8a8f93', metalDark: '#52565a',
     variants: [
@@ -310,6 +366,13 @@ const BOSS_THEMES = [
     name: 'TALOS, EL COLOSO DE BRONCE', weapon: 'hammer', scale: 1.35, maxHp: 480,
     body: '#c9973f', bodyDark: '#7a5620', crest: '#f6f1e2', eye: '#ff8a2a', shield: '#c9973f', shieldDark: '#7a5620', metal: '#fff3c4',
   },
+  {
+    // The true final boss: Ares himself, arriving as night falls. Same rig,
+    // vastly bigger, wreathed in a divine fire that the other bosses don't
+    // have (see the `divine` flag, used by drawBoss to add flame + lightning).
+    name: 'ARES, DIOS DE LA GUERRA', weapon: 'spear', scale: 1.85, maxHp: 900, divine: true,
+    body: '#6e1210', bodyDark: '#2e0705', crest: '#161616', eye: '#ff3300', shield: '#1c0e0c', shieldDark: '#0c0504', metal: '#3a1512',
+  },
 ];
 
 // ---------- Save data: persistent bank + equipped gear across runs ----------
@@ -338,7 +401,8 @@ const save = loadSave();
 const bossCheckpoints = [
   { z: -200, theme: BOSS_THEMES[0] },
   { z: -400, theme: BOSS_THEMES[1] },
-  { z: LEVEL_END_Z, theme: BOSS_THEMES[2] },
+  { z: -600, theme: BOSS_THEMES[2] },
+  { z: LEVEL_END_Z, theme: BOSS_THEMES[3] },
 ];
 
 // ---------- World scenery (static): a marble colonnade flanking the path,
@@ -575,16 +639,17 @@ function drawBrazier(p) {
 
   const t = runCycle * 6 + p.phase;
   const fs = proj.scale;
+  const dayT = computeDayT(p.z);
   ctx.translate(proj.sx, proj.sy - 0.16 * fs);
-  ctx.fillStyle = 'rgba(255,150,40,0.35)';
-  ctx.beginPath(); ctx.arc(0, 0, 0.55 * fs, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = `rgba(255,150,40,${0.35 + dayT * 0.3})`;
+  ctx.beginPath(); ctx.arc(0, 0, (0.55 + dayT * 0.35) * fs, 0, Math.PI * 2); ctx.fill();
   for (let i = 0; i < 3; i++) {
     const fl = Math.sin(t + i * 2.1) * 0.5 + 0.5;
     const fx = Math.sin(t * 1.7 + i) * 0.12 * fs;
     const fh = (0.32 + fl * 0.22) * fs;
     ctx.fillStyle = i === 1 ? '#ffe066' : '#ff7a2a';
     ctx.shadowColor = '#ff9a2a';
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 8 + dayT * 10;
     ctx.beginPath();
     ctx.moveTo(fx - 0.09 * fs, 0);
     ctx.quadraticCurveTo(fx - 0.12 * fs, -fh * 0.6, fx, -fh);
@@ -695,48 +760,103 @@ function drawCloud(cx, cy, s, alpha) {
   ctx.restore();
 }
 
+// Fixed star field (screen-fraction positions via a golden-angle spread so
+// they never clump), faded in as night falls.
+const STAR_POSITIONS = Array.from({ length: 46 }, (_, i) => ({
+  x: (i * 137.508) % 100 / 100,
+  y: ((i * 71.317) % 100) / 100 * 0.8,
+  s: 0.6 + (i % 5) * 0.3,
+  phase: i * 1.7,
+}));
+function drawStars(dayT) {
+  if (dayT <= 0.04) return;
+  ctx.save();
+  for (const st of STAR_POSITIONS) {
+    const twinkle = 0.5 + 0.5 * Math.sin(atmosphereT * 2 + st.phase);
+    ctx.globalAlpha = dayT * (0.25 + twinkle * 0.55);
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(st.x * W, st.y * HORIZON_Y, st.s, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
 function drawBackground() {
+  const dayT = computeDayT(player.z);
+  const sky1 = lerpColor(COL.sky1, NIGHT.sky1, dayT);
+  const sky2 = lerpColor(COL.sky2, NIGHT.sky2, dayT);
+  const sky3 = lerpColor(COL.sky3, NIGHT.sky3, dayT);
+  const fog = lerpColor(COL.fog, NIGHT.fog, dayT);
+  const sand1 = lerpColor(COL.sand1, NIGHT.sand1, dayT);
+  const sand2 = lerpColor(COL.sand2, NIGHT.sand2, dayT);
+  const mtn1 = lerpColor('#a9c3dd', NIGHT.mtn1, dayT);
+  const mtn2 = lerpColor('#8fb3d6', NIGHT.mtn2, dayT);
+
   // sky
   const skyGrad = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
-  skyGrad.addColorStop(0, COL.sky3);
-  skyGrad.addColorStop(0.55, COL.sky2);
-  skyGrad.addColorStop(1, COL.sky1);
+  skyGrad.addColorStop(0, sky3);
+  skyGrad.addColorStop(0.55, sky2);
+  skyGrad.addColorStop(1, sky1);
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, W, HORIZON_Y);
 
   const sunX = CENTER_X + Math.sin(camera.x * 0.02) * 20;
   const sunY = HORIZON_Y * 0.5;
 
-  // drifting clouds, behind the mountains and sun
+  drawStars(dayT);
+
+  // drifting clouds, dimmer once night falls
   for (let i = 0; i < 4; i++) {
     const speed = 3.2 + i * 1.1;
     const cx = ((atmosphereT * speed + i * 210 - camera.x * 0.15) % (W + 260)) - 130;
     const cy = HORIZON_Y * (0.16 + (i % 3) * 0.13);
-    drawCloud(cx, cy, 34 + (i % 3) * 10, 0.5 - i * 0.06);
+    drawCloud(cx, cy, 34 + (i % 3) * 10, (0.5 - i * 0.06) * (1 - dayT * 0.75));
   }
 
   // hazy distant mountains, two parallax layers
-  drawMountainLayer(HORIZON_Y, HORIZON_Y * 0.22, '#a9c3dd', 0.55, 0.01, 4.1);
-  drawMountainLayer(HORIZON_Y, HORIZON_Y * 0.14, '#8fb3d6', 0.7, 0.025, 11.7);
+  drawMountainLayer(HORIZON_Y, HORIZON_Y * 0.22, mtn1, 0.55, 0.01, 4.1);
+  drawMountainLayer(HORIZON_Y, HORIZON_Y * 0.14, mtn2, 0.7, 0.025, 11.7);
 
-  // sun disc + glow
-  const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, H * 0.5);
-  glow.addColorStop(0, 'rgba(255,244,210,0.95)');
-  glow.addColorStop(0.35, 'rgba(255,214,140,0.35)');
-  glow.addColorStop(1, 'rgba(255,214,140,0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, W, HORIZON_Y * 1.4);
-  ctx.save();
-  ctx.fillStyle = '#fff9e8';
-  ctx.shadowColor = '#fff3c4';
-  ctx.shadowBlur = 30;
-  ctx.beginPath(); ctx.arc(sunX, sunY, Math.max(10, H * 0.032), 0, Math.PI * 2); ctx.fill();
-  ctx.restore();
+  // sun by day, moon by night — cross-fades at the same spot in the sky
+  if (dayT < 0.97) {
+    const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, H * 0.5);
+    glow.addColorStop(0, `rgba(255,244,210,${0.95 * (1 - dayT)})`);
+    glow.addColorStop(0.35, `rgba(255,214,140,${0.35 * (1 - dayT)})`);
+    glow.addColorStop(1, 'rgba(255,214,140,0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(0, 0, W, HORIZON_Y * 1.4);
+    ctx.save();
+    ctx.globalAlpha = 1 - dayT;
+    ctx.fillStyle = '#fff9e8';
+    ctx.shadowColor = '#fff3c4';
+    ctx.shadowBlur = 30;
+    ctx.beginPath(); ctx.arc(sunX, sunY, Math.max(10, H * 0.032), 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
+  if (dayT > 0.03) {
+    const mglow = ctx.createRadialGradient(sunX, sunY, 2, sunX, sunY, H * 0.32);
+    mglow.addColorStop(0, `rgba(200,210,255,${0.5 * dayT})`);
+    mglow.addColorStop(1, 'rgba(200,210,255,0)');
+    ctx.fillStyle = mglow;
+    ctx.fillRect(0, 0, W, HORIZON_Y * 1.4);
+    ctx.save();
+    ctx.globalAlpha = dayT;
+    ctx.fillStyle = '#e8ecf6';
+    ctx.shadowColor = '#c7d2f0';
+    ctx.shadowBlur = 22;
+    const mr = Math.max(9, H * 0.028);
+    ctx.beginPath(); ctx.arc(sunX, sunY, mr, 0, Math.PI * 2); ctx.fill();
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.arc(sunX + mr * 0.42, sunY - mr * 0.15, mr * 0.85, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
 
-  // god rays (soft streaks)
+  // god rays (soft streaks), warm by day / cool moonlight by night
   ctx.save();
-  ctx.globalAlpha = 0.10;
-  ctx.fillStyle = '#fff6da';
+  ctx.globalAlpha = 0.10 * (1 - dayT * 0.5);
+  ctx.fillStyle = dayT > 0.5 ? '#c7d2f0' : '#fff6da';
   for (let i = -3; i <= 3; i++) {
     const bx = sunX + i * 46;
     ctx.beginPath();
@@ -751,20 +871,32 @@ function drawBackground() {
 
   // ground
   const groundGrad = ctx.createLinearGradient(0, HORIZON_Y, 0, H);
-  groundGrad.addColorStop(0, COL.fog);
-  groundGrad.addColorStop(0.18, COL.sand2);
-  groundGrad.addColorStop(1, COL.sand1);
+  groundGrad.addColorStop(0, fog);
+  groundGrad.addColorStop(0.18, sand2);
+  groundGrad.addColorStop(1, sand1);
   ctx.fillStyle = groundGrad;
   ctx.fillRect(0, HORIZON_Y, W, H - HORIZON_Y);
 }
 
-function drawVignette() {
+function drawVignette(dayT) {
   const r = Math.max(W, H) * 0.75;
+  const edgeAlpha = 0.38 + (dayT || 0) * 0.16;
   const vg = ctx.createRadialGradient(CENTER_X, H * 0.52, r * 0.45, CENTER_X, H * 0.52, r);
   vg.addColorStop(0, 'rgba(0,0,0,0)');
-  vg.addColorStop(1, 'rgba(10,6,2,0.38)');
+  vg.addColorStop(1, `rgba(10,6,2,${edgeAlpha})`);
   ctx.fillStyle = vg;
   ctx.fillRect(0, 0, W, H);
+}
+
+// A translucent night-blue wash over the whole scene — cheaper and more
+// convincing than re-deriving every prop/warrior color for darkness.
+function drawNightTint(dayT) {
+  if (dayT <= 0.01) return;
+  ctx.save();
+  ctx.globalAlpha = dayT * 0.42;
+  ctx.fillStyle = '#0a1030';
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
 }
 
 // Slow-drifting dust motes catching the light, for atmosphere.
@@ -904,7 +1036,7 @@ function drawSoldierActor(worldX, worldZ, S, variant, metal, metalDark, bobT) {
     ctx.globalAlpha /= 0.28;
   }
   const bob = Math.abs(Math.sin(bobT)) * 0.05 * S;
-  drawActor3D({ x: worldX, y: bob, z: worldZ }, buildSoldierParts(S, variant, metal, metalDark, bobT));
+  drawActor3D({ x: worldX, y: bob, z: worldZ }, buildSoldierParts(S, variant, metal, metalDark, bobT), { outline: true });
 }
 
 const COIN_R = 0.17;
@@ -949,13 +1081,15 @@ const player = {
 
 function formationOffsets(n) {
   const perRow = 6;
+  const spacingX = 0.86, spacingZ = 0.78;
   const offsets = [];
   for (let i = 0; i < n; i++) {
     const row = Math.floor(i / perRow);
     const col = i % perRow;
     const inThisRow = Math.min(perRow, n - row * perRow);
     const startOffset = -(inThisRow - 1) / 2;
-    offsets.push({ x: (startOffset + col) * 0.62, z: row * 0.6 });
+    const brick = (row % 2 === 1) ? spacingX * 0.5 : 0; // stagger alternate ranks
+    offsets.push({ x: (startOffset + col) * spacingX + brick, z: row * spacingZ });
   }
   return offsets;
 }
@@ -1006,8 +1140,9 @@ function drawPlayerSquad() {
     const pop = player.displayScale[it.idx];
     const jitter = 0.94 + ((it.idx * 37) % 13) / 13 * 0.12;
     const variant = HERO_VARIANTS[it.idx % HERO_VARIANTS.length];
+    const metalTint = 0.86 + ((it.idx * 53) % 17) / 17 * 0.3;
     ctx.globalAlpha = fogFactor(proj.depth);
-    drawSoldierActor(it.wx, it.wz, pop * jitter, variant, armor.body, armor.bodyDark, it.bobT);
+    drawSoldierActor(it.wx, it.wz, pop * jitter, variant, shadeColor(armor.body, metalTint), shadeColor(armor.bodyDark, metalTint), it.bobT);
     ctx.globalAlpha = 1;
   }
 }
@@ -1119,7 +1254,8 @@ function spawnLevel() {
   const defs = [
     // Act 1: start -> boss checkpoint 1 (z -200)
     { type: 'gate', z: -40, op: 'x2' },
-    { type: 'coins', z: -70, lanes: [0, 2] },
+    { type: 'enemy', z: -75, lanes: [0], count: 2, etype: 'minimo' },
+    { type: 'coins', z: -70, lanes: [2] },
     { type: 'enemy', z: -110, lanes: [1], count: 3, etype: 'raso' },
     { type: 'gate', z: -155, op: 'x3' },
     { type: 'enemy', z: -180, lanes: [2], count: 4, etype: 'debil' },
@@ -1131,13 +1267,23 @@ function spawnLevel() {
     { type: 'gate', z: -330, op: 'x2' },
     { type: 'enemy', z: -365, lanes: [1], count: 14, etype: 'elite' },
 
-    // Act 3: boss 2 -> boss checkpoint 3 / level end (z -600)
+    // Act 3: boss 2 -> boss checkpoint 3 (z -600)
     { type: 'gate', z: -440, op: 'x3' },
     { type: 'enemy', z: -470, lanes: [0, 1, 2], count: 20, etype: 'raso' },
     { type: 'coins', z: -490, lanes: [0, 1, 2] },
     { type: 'gate', z: -520, op: '/2' },
     { type: 'enemy', z: -550, lanes: [0, 2], count: 16, etype: 'elite' },
     { type: 'coins', z: -570, lanes: [0, 1, 2] },
+
+    // Act 4: boss 3 (Talos) -> Ares, the god of war (z -800), as night falls
+    { type: 'gate', z: -630, op: 'x2' },
+    { type: 'enemy', z: -655, lanes: [0, 1, 2], count: 12, etype: 'minimo' },
+    { type: 'coins', z: -670, lanes: [0, 1, 2] },
+    { type: 'gate', z: -690, op: 'x3' },
+    { type: 'enemy', z: -715, lanes: [0, 1], count: 22, etype: 'elite' },
+    { type: 'coins', z: -730, lanes: [0, 1, 2] },
+    { type: 'gate', z: -745, op: '+5' },
+    { type: 'enemy', z: -765, lanes: [0, 1, 2], count: 28, etype: 'elite' },
   ];
 
   defs.forEach(def => {
@@ -1218,8 +1364,9 @@ function drawEnemyCluster(o) {
     if (!proj.ok || proj.depth > FAR_CLIP || proj.depth < 0) continue;
     const jitter = 0.94 + ((it.idx * 37) % 13) / 13 * 0.12;
     const variant = etype.variants[it.idx % etype.variants.length];
+    const metalTint = 0.86 + ((it.idx * 53) % 17) / 17 * 0.3;
     ctx.globalAlpha = fogFactor(proj.depth);
-    drawSoldierActor(it.wx, it.wz, etype.sizeMult * jitter, variant, etype.metal, etype.metalDark, runCycle * 8 + it.idx);
+    drawSoldierActor(it.wx, it.wz, etype.sizeMult * jitter, variant, shadeColor(etype.metal, metalTint), shadeColor(etype.metalDark, metalTint), runCycle * 8 + it.idx);
     ctx.globalAlpha = 1;
   }
 }
@@ -1285,15 +1432,24 @@ function buildBossParts(theme, shakeT, hpFrac) {
   parts.push({ center: [shoulderR[0], shoulderR[1] - weaponArmHalf[1], shoulderR[2]], half: weaponArmHalf, color: theme.bodyDark, rot: armRot });
 
   const tip = [shoulderR[0], shoulderR[1] - weaponArmHalf[1] * 2, shoulderR[2]];
+  let weaponFireAt = null; // world-relative (pre-actor-offset) point for a fire/divine flourish
   if (theme.weapon === 'axe') {
     parts.push({ center: [tip[0], tip[1] - 0.35 * S, tip[2]], half: [0.12 * S, 0.35 * S, 0.12 * S], color: theme.metal, rot: armRot });
     parts.push({ center: [tip[0] + 0.32 * S, tip[1] - 0.55 * S, tip[2]], half: [0.3 * S, 0.28 * S, 0.06 * S], color: theme.metal, rot: armRot });
     parts.push({ center: [tip[0] - 0.32 * S, tip[1] - 0.55 * S, tip[2]], half: [0.3 * S, 0.28 * S, 0.06 * S], color: theme.metal, rot: armRot });
+    weaponFireAt = { local: [tip[0], tip[1] - 0.55 * S, tip[2]], rot: armRot };
   } else if (theme.weapon === 'hammer') {
     parts.push({ center: [tip[0], tip[1] - 0.55 * S, tip[2]], half: [0.4 * S, 0.4 * S, 0.4 * S], color: theme.metal, rot: armRot });
+    weaponFireAt = { local: [tip[0], tip[1] - 0.55 * S, tip[2]], rot: armRot };
+  } else if (theme.weapon === 'spear') {
+    parts.push({ center: [tip[0], tip[1] - 0.9 * S, tip[2]], half: [0.06 * S, 0.9 * S, 0.06 * S], color: theme.metal, rot: armRot });
+    parts.push({ center: [tip[0], tip[1] - 1.75 * S, tip[2]], half: [0.14 * S, 0.28 * S, 0.05 * S], color: theme.metal, rot: armRot });
+    parts.push({ center: [tip[0], tip[1] - 1.35 * S, tip[2]], half: [0.2 * S, 0.06 * S, 0.06 * S], color: theme.bodyDark, rot: armRot });
+    weaponFireAt = { local: [tip[0], tip[1] - 2.0 * S, tip[2]], rot: armRot };
   } else { // sword
     parts.push({ center: [tip[0], tip[1] - 0.55 * S, tip[2]], half: [0.09 * S, 0.55 * S, 0.05 * S], color: theme.metal, rot: armRot });
     parts.push({ center: [tip[0], tip[1] - 0.08 * S, tip[2]], half: [0.26 * S, 0.06 * S, 0.1 * S], color: theme.bodyDark, rot: armRot });
+    weaponFireAt = { local: [tip[0], tip[1] - 1.05 * S, tip[2]], rot: armRot };
   }
 
   // Torso
@@ -1309,7 +1465,7 @@ function buildBossParts(theme, shakeT, hpFrac) {
   });
   parts.push({ center: [0, headCenterY - 0.02 * S, headHalf[2] * 0.7], half: [0.06 * S, 0.26 * S, 0.05 * S], color: theme.bodyDark });
 
-  return { parts, torsoCenterY, torsoHalf, headCenterY };
+  return { parts, torsoCenterY, torsoHalf, headCenterY, weaponFireAt };
 }
 
 function drawBoss() {
@@ -1340,6 +1496,37 @@ function drawBoss() {
   ctx.globalAlpha = fog;
   drawActor3D(actor, rig.parts);
   ctx.restore();
+
+  // divine fire wreathing the weapon — only Ares (and any future god boss)
+  if (theme.divine && rig.weaponFireAt) {
+    const { local, rot } = rig.weaponFireAt;
+    const rotated = rot ? rotateAroundPivot(local, rot.pivot, rot.axis, rot.angle) : local;
+    const fireProj = project(rotated[0] + actor.x, rotated[1] + actor.y, rotated[2] + actor.z);
+    if (fireProj.ok) {
+      const fs = fireProj.scale * theme.scale;
+      const t = runCycle * 8 + boss.shakeT * 3;
+      ctx.save();
+      ctx.globalAlpha = fog;
+      ctx.translate(fireProj.sx, fireProj.sy);
+      for (let i = 0; i < 4; i++) {
+        const fl = Math.sin(t + i * 1.9) * 0.5 + 0.5;
+        const fx = Math.sin(t * 1.6 + i * 2) * 0.1 * fs;
+        const fy = -Math.abs(Math.cos(t * 1.3 + i)) * 0.18 * fs;
+        const fh = (0.22 + fl * 0.18) * fs;
+        ctx.fillStyle = i % 2 === 0 ? '#ff5a1a' : '#ffcf4a';
+        ctx.shadowColor = '#ff3300';
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(fx - 0.06 * fs, fy);
+        ctx.quadraticCurveTo(fx - 0.08 * fs, fy - fh * 0.6, fx, fy - fh);
+        ctx.quadraticCurveTo(fx + 0.08 * fs, fy - fh * 0.6, fx + 0.06 * fs, fy);
+        ctx.closePath();
+        ctx.fill();
+      }
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    }
+  }
 
   // glowing eyes + damage cracks/ichor glow, as a 2D overlay on the head/torso
   const eyeProj = project(actor.x, rig.headCenterY, actor.z + 0.34 * theme.scale * 0.7);
@@ -1392,11 +1579,13 @@ function enterBossFight(checkpointIndex) {
   const checkpoint = bossCheckpoints[checkpointIndex];
   state.mode = 'boss';
   boss = buildBoss(checkpoint);
+  lightningTimer = 1.2;
   els.bossHudWrap.classList.remove('hidden');
   els.bossLabel.textContent = checkpoint.theme.name;
   toast(`¡${checkpoint.theme.name.split(',')[0]}!`);
 }
 
+let lightningTimer = 1.5;
 function updateBoss(dt) {
   if (!boss || !boss.alive) return;
   boss.spawnT += dt;
@@ -1407,14 +1596,24 @@ function updateBoss(dt) {
   boss.shakeT += dt;
   els.bossHpBar.style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
 
+  if (boss.theme.divine) {
+    lightningTimer -= dt;
+    if (lightningTimer <= 0) {
+      lightningTimer = 1.8 + Math.random() * 2.2;
+      triggerFlash('#eaf3ff', 0.28);
+      triggerShake(0.15);
+      AudioFX.laser();
+    }
+  }
+
   if (boss.hp <= 0 && boss.alive) {
     boss.alive = false;
     spawnExplosion(boss.x, boss.z, '#ffb347');
     spawnExplosion(boss.x, boss.z, '#ff7a3c');
     spawnCoinBurst(boss.x, boss.z, 50 + bossCheckpointIndex * 20);
     AudioFX.explosion();
-    triggerShake(0.7);
-    triggerFlash('#ffe066', 0.5);
+    triggerShake(boss.theme.divine ? 1.0 : 0.7);
+    triggerFlash(boss.theme.divine ? '#ffffff' : '#ffe066', boss.theme.divine ? 0.75 : 0.5);
     els.bossHudWrap.classList.add('hidden');
     boss = null;
     const wasFinal = bossCheckpointIndex >= bossCheckpoints.length - 1;
@@ -1741,9 +1940,12 @@ function animate(now) {
   drawLasers();
   drawDustMotes();
 
+  const dayT = computeDayT(player.z);
+  drawNightTint(dayT);
+
   ctx.restore();
 
-  drawVignette();
+  drawVignette(dayT);
   if (flashAlpha > 0.005) {
     ctx.save();
     ctx.globalAlpha = flashAlpha;

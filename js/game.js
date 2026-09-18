@@ -986,8 +986,20 @@ const SPEAR_WOOD = '#6b4a2a', SPEAR_WOOD_DARK = '#3f2c18';
 
 function buildSoldierParts(S, variant, metal, metalDark, bobT) {
   const parts = [];
-  const skirtHalf = [0.26 * S, 0.28 * S, 0.22 * S];
-  parts.push({ center: [0, 0.28 * S, 0], half: skirtHalf, color: variant.skinDark });
+
+  // legs — a real alternating running stride (not just a static kilt),
+  // the single biggest thing that makes a runner look alive
+  const hipY = 0.26 * S;
+  const legHalf = [0.095 * S, 0.15 * S, 0.1 * S];
+  [-1, 1].forEach((side, i) => {
+    const phase = i === 0 ? 0 : Math.PI;
+    const swing = Math.sin(bobT + phase) * 0.8;
+    const hip = [side * 0.14 * S, hipY, 0];
+    parts.push({ center: [hip[0], hipY - legHalf[1], hip[2]], half: legHalf, color: variant.skinDark, rot: { axis: 'x', angle: swing, pivot: hip } });
+  });
+
+  const kiltHalf = [0.27 * S, 0.16 * S, 0.22 * S];
+  parts.push({ center: [0, hipY + kiltHalf[1], 0], half: kiltHalf, color: variant.skinDark });
 
   const torsoHalf = [0.30 * S, 0.32 * S, 0.20 * S];
   const torsoCenterY = 0.56 * S + torsoHalf[1];
@@ -1028,6 +1040,16 @@ function buildSoldierParts(S, variant, metal, metalDark, bobT) {
   parts.push({ center: [spearBase[0], spearBase[1] + 1.62 * S, spearBase[2]], half: [0.06 * S, 0.16 * S, 0.03 * S], color: metal, rot: spearRot });
   parts.push({ center: [spearBase[0], spearBase[1] + 0.2 * S, spearBase[2]], half: [0.05 * S, 0.1 * S, 0.05 * S], color: SPEAR_WOOD_DARK, rot: spearRot });
 
+  // a free arm swinging opposite the near-side leg, for a natural running
+  // counter-swing (the other arm is busy carrying the spear)
+  const shoulderFree = [-0.32 * S, torsoCenterY + 0.22 * S, 0.02 * S];
+  const armHalf = [0.075 * S, 0.24 * S, 0.075 * S];
+  const armSwing = Math.sin(bobT + Math.PI) * 0.45;
+  parts.push({
+    center: [shoulderFree[0], shoulderFree[1] - armHalf[1], shoulderFree[2]], half: armHalf, color: variant.skin,
+    rot: { axis: 'x', angle: armSwing, pivot: shoulderFree },
+  });
+
   // cape — flows down the back with a slow cloth-lag sway, independent of
   // the faster running bob
   const sway = Math.sin(bobT * 0.6) * 0.05 * S;
@@ -1039,8 +1061,8 @@ function buildSoldierParts(S, variant, metal, metalDark, bobT) {
     points: [
       [-0.2 * S, shoulderY, capeZ],
       [0.2 * S, shoulderY, capeZ],
-      [0.32 * S + sway, 0.04 * S, capeZ + billow],
-      [-0.32 * S + sway, 0.04 * S, capeZ + billow],
+      [0.26 * S + sway, hipY * 0.7, capeZ + billow],
+      [-0.26 * S + sway, hipY * 0.7, capeZ + billow],
     ],
     color: variant.cape,
   });

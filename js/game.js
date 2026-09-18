@@ -175,11 +175,34 @@ function pushDiscFace(out, actor, part) {
   }
 }
 
-// Draws a full actor (array of box/disc parts) as a depth-sorted face list.
+// Appends a flat quad panel (e.g. a cape) given 4 explicit local corner
+// points (in order around the perimeter); its normal is derived from the
+// corners themselves so it shades correctly as it rotates/flutters.
+function pushPanelFace(out, actor, part) {
+  let pts = part.points;
+  if (part.rot) {
+    const { axis, angle, pivot } = part.rot;
+    pts = pts.map(p => rotateAroundPivot(p, pivot, axis, angle));
+  }
+  const e1 = vsub(pts[1], pts[0]);
+  const e2 = vsub(pts[2], pts[0]);
+  let normal = vnorm([e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]]);
+  if (vdot(normal, VIEW_DIR) < -0.04) normal = normal.map(v => -v); // panels are thin: shade whichever side faces us
+  if (vdot(normal, VIEW_DIR) < 0.04) return;
+  const world = pts.map(p => [p[0] + actor.x, p[1] + actor.y, p[2] + actor.z]);
+  const proj = world.map(p => project(p[0], p[1], p[2]));
+  if (proj.some(pp => !pp.ok)) return;
+  const depth = proj.reduce((s, pp) => s + pp.depth, 0) / proj.length;
+  const light = Math.max(0.32, Math.min(1.15, vdot(normal, LIGHT_DIR) * 0.85 + 0.45));
+  out.push({ depth, pts: proj, color: shadeColor(part.color, light) });
+}
+
+// Draws a full actor (array of box/disc/panel parts) as a depth-sorted face list.
 function drawActor3D(actor, parts) {
   const faces = [];
   for (const part of parts) {
     if (part.kind === 'disc') pushDiscFace(faces, actor, part);
+    else if (part.kind === 'panel') pushPanelFace(faces, actor, part);
     else pushBoxFaces(faces, actor, part);
   }
   faces.sort((a, b) => b.depth - a.depth); // farthest first (painter's algorithm)
@@ -226,19 +249,49 @@ const WEAPON_TIERS = [
   { name: 'Rayo de Zeus', power: 2.3, cost: 120, laser: '#e0b3ff' },
 ];
 // Armor tier: mitigates enemy effective threat and reduces casualties on a
-// win, and recolors the hero cuirass.
+// win. Spartans fight bare-chested, so this tier instead reskins the shield
+// (bronze -> iron -> silver -> the radiant Aegis) — a hoplite's real pride.
 const ARMOR_TIERS = [
-  { name: 'Coraza de Bronce', defense: 0.0, cost: 0, body: '#e0a83f', bodyDark: '#9c6c1f' },
-  { name: 'Coraza de Hierro', defense: 0.15, cost: 25, body: '#a9b2ba', bodyDark: '#5b636a' },
-  { name: 'Coraza de Plata', defense: 0.30, cost: 60, body: '#dfe6ea', bodyDark: '#8b939a' },
-  { name: 'Armadura de Aegis', defense: 0.45, cost: 120, body: '#fff3c4', bodyDark: '#e0b84a' },
+  { name: 'Escudo de Bronce', defense: 0.0, cost: 0, body: '#c9973f', bodyDark: '#7a5620' },
+  { name: 'Escudo de Hierro', defense: 0.15, cost: 25, body: '#a9b2ba', bodyDark: '#5b636a' },
+  { name: 'Escudo de Plata', defense: 0.30, cost: 60, body: '#dfe6ea', bodyDark: '#8b939a' },
+  { name: 'Escudo de Aegis', defense: 0.45, cost: 120, body: '#fff3c4', bodyDark: '#e0b84a' },
 ];
 
-// Enemy variety: a power multiplier (effective threat) plus a visual profile.
+// Per-warrior visual variation (skin tone, cape shade, crest) so no two
+// hoplites in a phalanx look quite identical. Cycled deterministically by
+// formation index, not randomized per frame.
+const HERO_VARIANTS = [
+  { skin: '#c98a54', skinDark: '#8f5c34', cape: '#b8291f', crest: '#f6f1e2' },
+  { skin: '#b97b45', skinDark: '#7d5129', cape: '#9c1f17', crest: '#efe2c0' },
+  { skin: '#d59a63', skinDark: '#96683c', cape: '#c93a2a', crest: '#fff6e0' },
+  { skin: '#a66f3d', skinDark: '#6f4a26', cape: '#7a1712', crest: '#e8dcc0' },
+];
+
+// Enemy variety: a power multiplier (effective threat) plus a visual profile
+// — a rival dark-caped warband, same Spartan rig, different colors per type.
 const ENEMY_TYPES = {
-  debil: { power: 0.7, sizeMult: 0.85, body: '#b0524a', bodyDark: '#6e2f28', crest: '#8a8a8a', label: 'Explorador' },
-  raso: { power: 1.0, sizeMult: 1.0, body: '#7a2b2b', bodyDark: '#431616', crest: '#1c1c1c', label: 'Soldado' },
-  elite: { power: 1.4, sizeMult: 1.18, body: '#3a1414', bodyDark: '#1a0808', crest: '#ff8a2a', label: 'Élite' },
+  debil: {
+    power: 0.7, sizeMult: 0.85, label: 'Explorador', metal: '#8a8f93', metalDark: '#52565a',
+    variants: [
+      { skin: '#9c6a52', skinDark: '#5f3f2c', cape: '#5a5a5a', crest: '#8a8a8a' },
+      { skin: '#8f5f49', skinDark: '#553626', cape: '#4a4a4a', crest: '#9a9a9a' },
+    ],
+  },
+  raso: {
+    power: 1.0, sizeMult: 1.0, label: 'Soldado', metal: '#6a6a6a', metalDark: '#3a3a3a',
+    variants: [
+      { skin: '#8a4a3f', skinDark: '#552c24', cape: '#4a2020', crest: '#5a5a5a' },
+      { skin: '#7d4136', skinDark: '#4a251e', cape: '#3e1c1c', crest: '#666666' },
+    ],
+  },
+  elite: {
+    power: 1.4, sizeMult: 1.18, label: 'Élite', metal: '#4a2424', metalDark: '#2a1212',
+    variants: [
+      { skin: '#5a2020', skinDark: '#2e0f0f', cape: '#6a1414', crest: '#ff8a2a' },
+      { skin: '#4f1d1d', skinDark: '#280d0d', cape: '#5a1818', crest: '#ff9a3a' },
+    ],
+  },
 };
 
 // Boss themes: each mini/final boss reuses the same Talos-style rig but with
@@ -293,16 +346,45 @@ const bossCheckpoints = [
 // at intervals.
 const scenery = [];
 
+const BANNER_COLORS = ['#b8291f', '#e8b93a', '#2f6fa8'];
+
 function buildWorld() {
   const colXs = [-8.0, 8.0];
-  colXs.forEach((baseX) => {
+  colXs.forEach((baseX, side) => {
     let z = 32;
+    let i = 0;
     while (z > LEVEL_END_Z - 40) {
-      const height = 8.5 + Math.random() * 2.2;
-      scenery.push({ type: 'column', x: baseX, z, height });
+      const broken = i % 5 === 4; // one in five columns stands in ruin
+      const height = broken ? (3 + Math.random() * 2.5) : (8.5 + Math.random() * 2.2);
+      scenery.push({ type: 'column', x: baseX, z, height, broken });
+      if (!broken && i % 3 === 1) {
+        scenery.push({ type: 'banner', x: baseX + (side === 0 ? 0.9 : -0.9), z: z - 1, height, color: BANNER_COLORS[i % BANNER_COLORS.length], phase: i * 1.7 });
+      }
       z -= 4.2 + Math.random() * 1.3;
+      i++;
     }
   });
+
+  // Statues on pedestals, alternating marble/bronze, just outside the
+  // colonnade.
+  let sz = 12;
+  let si = 0;
+  while (sz > LEVEL_END_Z - 20) {
+    const side = si % 2 === 0 ? -1 : 1;
+    scenery.push({ type: 'statue', x: side * 10.4, z: sz, bronze: si % 3 === 0 });
+    sz -= 52 + (si % 3) * 6;
+    si++;
+  }
+
+  // Braziers flanking the path itself, closer in, lighting the way.
+  let bz = 18;
+  let bi = 0;
+  while (bz > LEVEL_END_Z - 20) {
+    const side = bi % 2 === 0 ? -1 : 1;
+    scenery.push({ type: 'brazier', x: side * 3.7, z: bz, phase: bi * 2.3 });
+    bz -= 20 + (bi % 4) * 3;
+    bi++;
+  }
 
   // A temple gateway just ahead of the start, plus one right at each boss
   // checkpoint for a dramatic arrival.
@@ -349,16 +431,36 @@ function drawColumn(p) {
     if (a.ok && b.ok) { ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke(); }
   }
 
-  // capital (top cap, wider)
-  const capHW = hw * 1.6, capH = 0.5;
-  const cTL = project(p.x - capHW, p.height + capH, p.z);
-  const cTR = project(p.x + capHW, p.height + capH, p.z);
-  if (cTL.ok && cTR.ok) {
-    ctx.fillStyle = COL.archDark;
-    ctx.beginPath();
-    ctx.moveTo(topL.sx, topL.sy);
-    ctx.lineTo(cTL.sx, cTL.sy); ctx.lineTo(cTR.sx, cTR.sy); ctx.lineTo(topR.sx, topR.sy);
-    ctx.closePath(); ctx.fill();
+  if (p.broken) {
+    // jagged, crumbled top instead of a neat capital
+    const midA = project(p.x - hw * 0.3, p.height + 0.35, p.z);
+    const midB = project(p.x + hw * 0.15, p.height + 0.55, p.z);
+    if (midA.ok && midB.ok) {
+      ctx.fillStyle = COL.cliffC;
+      ctx.beginPath();
+      ctx.moveTo(topL.sx, topL.sy);
+      ctx.lineTo(midA.sx, midA.sy); ctx.lineTo(midB.sx, midB.sy);
+      ctx.lineTo(topR.sx, topR.sy);
+      ctx.closePath(); ctx.fill();
+    }
+    // rubble at the base
+    ctx.fillStyle = COL.cliffB;
+    for (let k = 0; k < 3; k++) {
+      const rp = project(p.x - hw + k * hw * 0.7, 0.16, p.z + 0.3 - k * 0.25);
+      if (rp.ok) { ctx.beginPath(); ctx.arc(rp.sx, rp.sy, 3.2 * rp.scale * 0.1, 0, Math.PI * 2); ctx.fill(); }
+    }
+  } else {
+    // capital (top cap, wider)
+    const capHW = hw * 1.6, capH = 0.5;
+    const cTL = project(p.x - capHW, p.height + capH, p.z);
+    const cTR = project(p.x + capHW, p.height + capH, p.z);
+    if (cTL.ok && cTR.ok) {
+      ctx.fillStyle = COL.archDark;
+      ctx.beginPath();
+      ctx.moveTo(topL.sx, topL.sy);
+      ctx.lineTo(cTL.sx, cTL.sy); ctx.lineTo(cTR.sx, cTR.sy); ctx.lineTo(topR.sx, topR.sy);
+      ctx.closePath(); ctx.fill();
+    }
   }
 
   // base (stylobate)
@@ -423,9 +525,93 @@ function drawTemple(p) {
   ctx.globalAlpha = 1;
 }
 
+// A simple standing figure on a pedestal — marble or bronze, static.
+function drawStatue(p) {
+  const depth = camera.z - p.z;
+  if (depth < 0 || depth > FAR_CLIP) return;
+  const fog = fogFactor(depth);
+  const stone = p.bronze ? COL.gold : '#e8e2d0';
+  const stoneDark = p.bronze ? COL.goldDark : '#b8b098';
+  ctx.save();
+  ctx.globalAlpha = fog;
+  const parts = [
+    { center: [p.x, 0.5, p.z], half: [0.7, 0.5, 0.7], color: stoneDark }, // pedestal
+    { center: [p.x, 1.5, p.z], half: [0.32, 0.5, 0.24], color: stone }, // legs/robe
+    { center: [p.x, 2.3, p.z], half: [0.34, 0.32, 0.26], color: stone }, // torso
+    { center: [p.x, 2.78, p.z], half: [0.2, 0.2, 0.2], color: stone }, // head
+    { center: [p.x + 0.42, 2.35, p.z], half: [0.11, 0.32, 0.11], color: stone, rot: { axis: 'z', angle: -0.9, pivot: [p.x + 0.34, 2.55, p.z] } }, // raised arm
+  ];
+  drawActor3D({ x: 0, y: 0, z: 0 }, parts);
+  ctx.restore();
+}
+
+// A bronze brazier with a hand-drawn flicker of flame on top (2D overlay —
+// cheap, and shadowBlur glow reads better than a lit 3D face for fire).
+function drawBrazier(p) {
+  const proj = project(p.x, 1.05, p.z);
+  if (!proj.ok || proj.depth < 0 || proj.depth > FAR_CLIP) return;
+  const fog = fogFactor(proj.depth);
+  ctx.save();
+  ctx.globalAlpha = fog;
+  const parts = [
+    { center: [p.x, 0.55, p.z], half: [0.09, 0.55, 0.09], color: COL.goldDark }, // pole
+    { center: [p.x, 1.15, p.z], half: [0.32, 0.16, 0.32], color: COL.gold }, // bowl
+  ];
+  drawActor3D({ x: 0, y: 0, z: 0 }, parts);
+
+  const t = runCycle * 6 + p.phase;
+  const fs = proj.scale;
+  ctx.translate(proj.sx, proj.sy - 0.16 * fs);
+  ctx.fillStyle = 'rgba(255,150,40,0.35)';
+  ctx.beginPath(); ctx.arc(0, 0, 0.55 * fs, 0, Math.PI * 2); ctx.fill();
+  for (let i = 0; i < 3; i++) {
+    const fl = Math.sin(t + i * 2.1) * 0.5 + 0.5;
+    const fx = Math.sin(t * 1.7 + i) * 0.12 * fs;
+    const fh = (0.32 + fl * 0.22) * fs;
+    ctx.fillStyle = i === 1 ? '#ffe066' : '#ff7a2a';
+    ctx.shadowColor = '#ff9a2a';
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(fx - 0.09 * fs, 0);
+    ctx.quadraticCurveTo(fx - 0.12 * fs, -fh * 0.6, fx, -fh);
+    ctx.quadraticCurveTo(fx + 0.12 * fs, -fh * 0.6, fx + 0.09 * fs, 0);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  ctx.restore();
+}
+
+// A hanging cloth banner, gently swaying, projected as one flat panel.
+function drawBanner(p) {
+  const proj = project(p.x, p.height * 0.6, p.z);
+  if (!proj.ok || proj.depth < 0 || proj.depth > FAR_CLIP) return;
+  const fog = fogFactor(proj.depth);
+  const sway = Math.sin(runCycle * 1.3 + p.phase) * 0.18;
+  const topY = p.height + 0.3;
+  const botY = p.height - 2.1;
+  ctx.save();
+  ctx.globalAlpha = fog;
+  const part = {
+    kind: 'panel',
+    points: [
+      [p.x - 0.5, topY, p.z],
+      [p.x + 0.5, topY, p.z],
+      [p.x + 0.5 + sway, botY, p.z + 0.15],
+      [p.x - 0.5 + sway, botY, p.z + 0.15],
+    ],
+    color: p.color,
+  };
+  drawActor3D({ x: 0, y: 0, z: 0 }, [part]);
+  ctx.restore();
+}
+
 function drawSceneryPiece(p) {
   if (p.type === 'column') drawColumn(p);
   else if (p.type === 'temple') drawTemple(p);
+  else if (p.type === 'statue') drawStatue(p);
+  else if (p.type === 'brazier') drawBrazier(p);
+  else if (p.type === 'banner') drawBanner(p);
 }
 
 function drawBackground() {
@@ -473,7 +659,6 @@ function drawBackground() {
 }
 
 function drawLaneLines() {
-  const vp = { sx: CENTER_X + (0 - camera.x) * 0, sy: HORIZON_Y };
   [-1.1, 1.1, -3.5, 3.5].forEach((lx, i) => {
     const near = project(lx, 0, camera.z - 1.5);
     if (!near.ok) return;
@@ -484,109 +669,81 @@ function drawLaneLines() {
     ctx.lineTo(CENTER_X, HORIZON_Y);
     ctx.stroke();
   });
+  // decorative mosaic border just inside the colonnade
+  [-3.9, 3.9].forEach((lx) => {
+    const near = project(lx, 0, camera.z - 1.5);
+    if (!near.ok) return;
+    ctx.strokeStyle = 'rgba(200,140,60,0.4)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(near.sx, near.sy);
+    ctx.lineTo(CENTER_X, HORIZON_Y);
+    ctx.stroke();
+  });
 }
 
 // ---------- Soldier / creature sprite drawing ----------
 // Sprite sizes are defined in WORLD units and multiplied by `scale` (px per
 // world unit, from project()) to get pixel dimensions — never raw pixels.
-const SOLDIER_W = 0.52, SOLDIER_H = 0.95, SOLDIER_HEAD_R = 0.22, SOLDIER_BOB = 0.07;
+// ---------- Spartan hoplite rig (real 3D, player + enemy) ----------
+// Bare-chested torso, kilt, bronze Corinthian helmet, horsehair crest, a
+// shield slung on the back, and a cape that flows on the side the camera
+// actually sees (the runners' backs, since the camera trails behind them).
+function buildSoldierParts(S, variant, metal, metalDark, bobT) {
+  const parts = [];
+  const skirtHalf = [0.26 * S, 0.28 * S, 0.22 * S];
+  parts.push({ center: [0, 0.28 * S, 0], half: skirtHalf, color: variant.skinDark });
 
-function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popScale, bobT, crestColor, sizeMult) {
-  const s = scale * (popScale === undefined ? 1 : popScale) * (sizeMult || 1);
-  if (s < 1) return;
-  const bodyW = SOLDIER_W * s, bodyH = SOLDIER_H * s;
-  const bob = Math.sin(bobT) * SOLDIER_BOB * s;
-  const y = sy - bodyH * 0.42 + bob;
-  ctx.save();
-  ctx.translate(sx, y);
-  // shadow
-  ctx.globalAlpha = 0.28;
-  ctx.fillStyle = '#000';
-  ctx.beginPath();
-  ctx.ellipse(0, bodyH * 0.48, bodyW * 0.5, bodyW * 0.18, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.globalAlpha = 1;
-  // round hoplite shield, behind the body on one side
-  ctx.fillStyle = colorBodyDark;
-  ctx.beginPath();
-  ctx.ellipse(-bodyW * 0.46, bodyH * 0.05, bodyW * 0.32, bodyW * 0.38, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = crestColor || '#c0392b';
-  ctx.lineWidth = Math.max(1, bodyW * 0.05);
-  ctx.stroke();
-  // shield glint (rim-light, suggests curvature)
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = Math.max(1, bodyW * 0.04);
-  ctx.beginPath();
-  ctx.arc(-bodyW * 0.46, bodyH * 0.05, bodyW * 0.24, Math.PI * 1.1, Math.PI * 1.5);
-  ctx.stroke();
-  // tunic flare (pteruges skirt)
-  ctx.fillStyle = colorBodyDark;
-  ctx.beginPath();
-  ctx.moveTo(-bodyW * 0.42, bodyH * 0.4);
-  ctx.lineTo(bodyW * 0.42, bodyH * 0.4);
-  ctx.lineTo(bodyW * 0.5, bodyH * 0.6);
-  ctx.lineTo(-bodyW * 0.5, bodyH * 0.6);
-  ctx.closePath();
-  ctx.fill();
-  // body (cuirass) — gradient + a soft vertical highlight for a rounded,
-  // less flat-shaded look
-  const grad = ctx.createLinearGradient(-bodyW / 2, 0, bodyW / 2, 0);
-  grad.addColorStop(0, colorBodyDark);
-  grad.addColorStop(0.5, colorBody);
-  grad.addColorStop(1, colorBodyDark);
-  ctx.fillStyle = grad;
-  roundRect(-bodyW / 2, -bodyH * 0.15, bodyW, bodyH * 0.55, bodyW * 0.28);
-  ctx.fill();
-  ctx.save();
-  ctx.clip();
-  const sheen = ctx.createLinearGradient(-bodyW * 0.1, -bodyH * 0.15, bodyW * 0.28, -bodyH * 0.15);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.32)');
-  sheen.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = sheen;
-  ctx.fillRect(-bodyW * 0.1, -bodyH * 0.15, bodyW * 0.38, bodyH * 0.55);
-  ctx.restore();
-  // belt
-  ctx.fillStyle = colorBodyDark;
-  ctx.fillRect(-bodyW / 2, bodyH * 0.26, bodyW, bodyH * 0.06);
-  // head (Corinthian helmet)
-  const headR = bodyW * 0.42;
-  const headY = -bodyH * 0.28;
-  ctx.beginPath();
-  ctx.arc(0, headY, headR, 0, Math.PI * 2);
-  ctx.fillStyle = colorBody;
-  ctx.fill();
-  // helmet gloss highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.beginPath();
-  ctx.ellipse(-headR * 0.32, headY - headR * 0.28, headR * 0.28, headR * 0.16, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  // crest (horsehair plume)
-  ctx.fillStyle = crestColor || '#c0392b';
-  ctx.beginPath();
-  ctx.ellipse(0, headY - headR * 0.95, headR * 1.15, headR * 0.4, 0, 0, Math.PI * 2);
-  ctx.fill();
-  // nose guard
-  ctx.fillStyle = colorBodyDark;
-  ctx.fillRect(-headR * 0.08, headY - headR * 0.1, headR * 0.16, headR * 0.9);
-  // eye-slit glow
-  ctx.fillStyle = colorVisor;
-  ctx.shadowColor = colorVisor;
-  ctx.shadowBlur = 6 * s;
-  roundRect(-headR * 0.62, headY - headR * 0.32, headR * 1.24, headR * 0.4, headR * 0.2);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.restore();
+  const torsoHalf = [0.30 * S, 0.32 * S, 0.20 * S];
+  const torsoCenterY = 0.56 * S + torsoHalf[1];
+  parts.push({ center: [0, torsoCenterY, 0], half: torsoHalf, color: variant.skin });
+
+  const headHalf = [0.17 * S, 0.17 * S, 0.17 * S];
+  const headCenterY = torsoCenterY + torsoHalf[1] + headHalf[1] + 0.04 * S;
+  parts.push({ center: [0, headCenterY, 0], half: headHalf, color: metal, colorDark: metalDark });
+  parts.push({
+    center: [0, headCenterY + headHalf[1] + 0.1 * S, 0.02 * S], half: [0.07 * S, 0.13 * S, 0.32 * S], color: variant.crest,
+  });
+
+  // shield, slung on the back — mostly facing the camera since that's the
+  // visible side of a runner moving away into the level
+  parts.push({
+    kind: 'disc', center: [-0.05 * S, torsoCenterY + 0.05 * S, torsoHalf[2] + 0.1 * S],
+    normalAxis: [-0.25, 0.05, 0.95], radius: 0.44 * S, segments: 10, color: metal,
+  });
+
+  // cape — flows down the back with a slow cloth-lag sway, independent of
+  // the faster running bob
+  const sway = Math.sin(bobT * 0.6) * 0.05 * S;
+  const billow = 0.22 * S + Math.cos(bobT * 0.6) * 0.05 * S;
+  const capeZ = torsoHalf[2] + 0.04 * S;
+  const shoulderY = torsoCenterY + torsoHalf[1] * 0.7;
+  parts.push({
+    kind: 'panel',
+    points: [
+      [-0.2 * S, shoulderY, capeZ],
+      [0.2 * S, shoulderY, capeZ],
+      [0.32 * S + sway, 0.04 * S, capeZ + billow],
+      [-0.32 * S + sway, 0.04 * S, capeZ + billow],
+    ],
+    color: variant.cape,
+  });
+
+  return parts;
 }
 
-function roundRect(x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+function drawSoldierActor(worldX, worldZ, S, variant, metal, metalDark, bobT) {
+  const shadowProj = project(worldX, 0.02, worldZ);
+  if (shadowProj.ok) {
+    ctx.globalAlpha *= 0.28;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(shadowProj.sx, shadowProj.sy, 0.34 * shadowProj.scale * S, 0.13 * shadowProj.scale * S, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha /= 0.28;
+  }
+  const bob = Math.abs(Math.sin(bobT)) * 0.05 * S;
+  drawActor3D({ x: worldX, y: bob, z: worldZ }, buildSoldierParts(S, variant, metal, metalDark, bobT));
 }
 
 const COIN_R = 0.17;
@@ -665,9 +822,10 @@ function drawPlayerSquad() {
     if (!proj.ok || proj.depth > FAR_CLIP) continue;
     player.displayScale[it.idx] = Math.min(1, (player.displayScale[it.idx] || 0) + 0.09);
     const pop = player.displayScale[it.idx];
-    const fog = fogFactor(proj.depth);
-    ctx.globalAlpha = fog;
-    drawSoldier(proj.sx, proj.sy, proj.scale, armor.body, armor.bodyDark, COL.blueVisor, pop, it.bobT, COL.heroCrest);
+    const jitter = 0.94 + ((it.idx * 37) % 13) / 13 * 0.12;
+    const variant = HERO_VARIANTS[it.idx % HERO_VARIANTS.length];
+    ctx.globalAlpha = fogFactor(proj.depth);
+    drawSoldierActor(it.wx, it.wz, pop * jitter, variant, armor.body, armor.bodyDark, it.bobT);
     ctx.globalAlpha = 1;
   }
 }
@@ -869,8 +1027,10 @@ function drawEnemyCluster(o) {
   for (const it of items) {
     const proj = project(it.wx, 0, it.wz);
     if (!proj.ok || proj.depth > FAR_CLIP || proj.depth < 0) continue;
+    const jitter = 0.94 + ((it.idx * 37) % 13) / 13 * 0.12;
+    const variant = etype.variants[it.idx % etype.variants.length];
     ctx.globalAlpha = fogFactor(proj.depth);
-    drawSoldier(proj.sx, proj.sy, proj.scale, etype.body, etype.bodyDark, COL.redVisor, 1, runCycle * 8 + it.idx, etype.crest, etype.sizeMult);
+    drawSoldierActor(it.wx, it.wz, etype.sizeMult * jitter, variant, etype.metal, etype.metalDark, runCycle * 8 + it.idx);
     ctx.globalAlpha = 1;
   }
 }

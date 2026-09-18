@@ -2,7 +2,7 @@
 
 html, body {
   height: 100%;
-  background: #0a0604;
+  background: #0b0d10;
   overflow: hidden;
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
   touch-action: none;
@@ -49,15 +49,15 @@ canvas#game {
 }
 
 .pill {
-  background: rgba(10, 10, 20, 0.55);
-  border: 1px solid rgba(120, 220, 255, 0.4);
+  background: rgba(20, 16, 10, 0.55);
+  border: 1px solid rgba(230, 190, 90, 0.45);
   border-radius: 20px;
   padding: 6px 12px;
-  color: #eafcff;
+  color: #fff6e0;
   font-weight: 700;
   font-size: 15px;
   backdrop-filter: blur(4px);
-  box-shadow: 0 0 12px rgba(60, 200, 255, 0.25);
+  box-shadow: 0 0 12px rgba(220, 170, 60, 0.25);
   white-space: nowrap;
 }
 
@@ -74,7 +74,7 @@ canvas#game {
 #progressBar {
   height: 100%;
   width: 0%;
-  background: linear-gradient(90deg, #3ad1ff, #7dffb3);
+  background: linear-gradient(90deg, #e8b93a, #ffe08a);
   border-radius: 6px;
   transition: width 0.15s linear;
 }
@@ -124,8 +124,8 @@ canvas#game {
   transform: translate(-50%, -50%) scale(1);
   font-size: 42px;
   font-weight: 900;
-  color: #7dfcff;
-  text-shadow: 0 0 20px rgba(60,220,255,0.9), 0 2px 4px rgba(0,0,0,0.8);
+  color: #ffe066;
+  text-shadow: 0 0 20px rgba(230,180,50,0.9), 0 2px 4px rgba(0,0,0,0.8);
   opacity: 0;
   pointer-events: none;
   letter-spacing: 1px;
@@ -162,12 +162,12 @@ canvas#game {
 .screen h1 {
   font-size: 38px;
   line-height: 1.15;
-  color: #cdeeff;
+  color: #f3ead0;
   font-weight: 900;
   letter-spacing: 1px;
-  text-shadow: 0 0 24px rgba(80,200,255,0.6), 0 3px 6px rgba(0,0,0,0.7);
+  text-shadow: 0 0 24px rgba(220,180,60,0.55), 0 3px 6px rgba(0,0,0,0.7);
 }
-.screen h1 span { color: #3ad1ff; }
+.screen h1 span { color: #e8b93a; }
 .screen h1.red { color: #ff7a63; text-shadow: 0 0 24px rgba(255,60,40,0.7); }
 .screen h1.gold { color: #ffd479; text-shadow: 0 0 28px rgba(255,190,60,0.85); }
 
@@ -180,19 +180,19 @@ canvas#game {
 
 .btn {
   pointer-events: all;
-  background: linear-gradient(180deg, #4be0ff, #1b8fd6);
+  background: linear-gradient(180deg, #e8c060, #b8823c);
   border: none;
-  color: #04222e;
+  color: #3a2400;
   font-weight: 900;
   font-size: 18px;
   letter-spacing: 1px;
   padding: 16px 38px;
   border-radius: 32px;
-  box-shadow: 0 6px 0 #0f5c85, 0 8px 20px rgba(60,200,255,0.5);
+  box-shadow: 0 6px 0 #6b4a1f, 0 8px 20px rgba(220,170,60,0.5);
   cursor: pointer;
   transition: transform 0.08s;
 }
-.btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #0f5c85, 0 4px 10px rgba(60,200,255,0.5); }
+.btn:active { transform: translateY(4px); box-shadow: 0 2px 0 #6b4a1f, 0 4px 10px rgba(220,170,60,0.5); }
 
 .gold-btn {
   background: linear-gradient(180deg, #ffe08a, #ffab33);
@@ -202,10 +202,10 @@ canvas#game {
 .gold-btn:active { box-shadow: 0 2px 0 #a55f00, 0 4px 10px rgba(255,180,60,0.5); }
 
 .howto {
-  color: #bcd8e6;
+  color: #d8cdb0;
   font-size: 12.5px;
   line-height: 1.6;
   max-width: 300px;
   opacity: 0.85;
 }
-.howto .cyan { color: #3ad1ff; }
+.howto .accent { color: #e8b93a; }

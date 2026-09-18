@@ -1,8 +1,9 @@
-// Canyon Squad Runner — hyper-casual multiplier runner.
+// Falange Dorada — hyper-casual multiplier runner, Greek temple theme.
 // Pure Canvas2D pseudo-3D engine (no external libraries): a perspective
 // projector maps world (x,y,z) points to screen space, and everything —
-// canyon walls, arches, soldiers, gates, coins, boss, lasers — is drawn as
-// projected billboards / quads sorted back-to-front (painter's algorithm).
+// marble colonnades, temple gateways, hoplites, gates, coins, the Talos
+// boss, lasers — is drawn as projected billboards / quads sorted
+// back-to-front (painter's algorithm).
 (() => {
 'use strict';
 
@@ -57,127 +58,159 @@ function fogFactor(depth) {
   return Math.max(0, Math.min(1, f));
 }
 
-// ---------- Colors ----------
+// ---------- Colors (marble temple / Greek theme) ----------
 const COL = {
-  sky1: '#ffd98a', sky2: '#f2a35c', sky3: '#e2793f',
-  fog: '#e89a5c',
-  sand1: '#e6a25a', sand2: '#b96a34',
-  cliffA: '#b35a2f', cliffB: '#8f4423', cliffC: '#c96f3a',
-  arch: '#9c5a34', archDark: '#6e3b1f',
-  blueBody: '#2fa8e0', blueBodyDark: '#1c7fb0', blueVisor: '#9ff3ff', blueGlow: '#3ad1ff',
-  redBody: '#c23b2c', redBodyDark: '#8f2a1f', redVisor: '#ffb199', redGlow: '#ff5a3c',
-  gold: '#ffc94a', goldDark: '#a5691a', stinger: '#ff8a2a',
-  laser: '#8ef3ff',
-  gate: 'rgba(75,224,255,0.32)', gateEdge: '#4be0ff',
+  sky1: '#cfe8ff', sky2: '#8fc6ee', sky3: '#4a90d9',
+  fog: '#cfe8ff',
+  sand1: '#efe9da', sand2: '#c9c0a8',
+  cliffA: '#f3efe3', cliffB: '#d8d2c2', cliffC: '#b7ae98',
+  arch: '#e4ddc8', archDark: '#a89f89',
+  blueBody: '#e0a83f', blueBodyDark: '#9c6c1f', blueVisor: '#fff3c4', blueGlow: '#ffdf8a',
+  redBody: '#7a2b2b', redBodyDark: '#431616', redVisor: '#ff7a63', redGlow: '#ff5a3c',
+  gold: '#b8823c', goldDark: '#6b4a1f', stinger: '#ff8a2a',
+  laser: '#ffe066',
+  gate: 'rgba(232,185,58,0.32)', gateEdge: '#e8b93a',
   coin: '#ffd24a', coinDark: '#b97e15',
+  heroCrest: '#f6f1e2', enemyCrest: '#1c1c1c',
+  laurel: '#5a8a4a',
 };
 
-// ---------- World scenery (static) ----------
-const scenery = []; // {type, x, y, z, hw, hh, colorFront, colorSide}
+// ---------- World scenery (static): a marble colonnade flanking the path,
+// with temple-facade gateways (columns + architrave + pediment) spanning it
+// at intervals.
+const scenery = [];
 
 function buildWorld() {
-  const wallXs = [-8.8, 8.8];
-  wallXs.forEach((baseX, side) => {
-    let z = 34;
-    const dir = side === 0 ? 1 : -1; // face normal towards path
+  const colXs = [-8.0, 8.0];
+  colXs.forEach((baseX) => {
+    let z = 32;
     while (z > BOSS_Z - 40) {
-      const segLen = 12 + Math.random() * 9;
-      const height = 15 + Math.random() * 16;
-      const jitter = (Math.random() - 0.5) * 2.2;
-      const colors = [COL.cliffA, COL.cliffB, COL.cliffC];
-      scenery.push({
-        type: 'wall',
-        x: baseX + jitter,
-        zNear: z, zFar: z - segLen,
-        height,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        dir,
-      });
-      z -= segLen + 0.5;
+      const height = 8.5 + Math.random() * 2.2;
+      scenery.push({ type: 'column', x: baseX, z, height });
+      z -= 4.2 + Math.random() * 1.3;
     }
   });
 
-  const archZs = [-32, -145, -262, -382, BOSS_Z - 8];
-  archZs.forEach((z, i) => {
-    const s = i === archZs.length - 1 ? 1.7 : 1;
-    scenery.push({ type: 'arch', z, scale: s });
+  const templeZs = [-32, -145, -262, -382, BOSS_Z - 8];
+  templeZs.forEach((z, i) => {
+    const s = i === templeZs.length - 1 ? 1.7 : 1;
+    scenery.push({ type: 'temple', z, scale: s });
   });
 
-  scenery.sort((a, b) => {
-    const az = a.type === 'wall' ? (a.zNear + a.zFar) / 2 : a.z;
-    const bz = b.type === 'wall' ? (b.zNear + b.zFar) / 2 : b.z;
-    return az - bz; // ascending world z (we'll draw far-to-near => reverse iterate)
-  });
+  scenery.sort((a, b) => a.z - b.z); // ascending (most negative/farthest first)
 }
 buildWorld();
 
-function drawSceneryPiece(p) {
-  if (p.type === 'wall') {
-    const midZ = (p.zNear + p.zFar) / 2;
-    const depth = camera.z - midZ;
-    if (depth < 0 || depth > FAR_CLIP) return;
-    const topN = project(p.x, p.height, p.zNear);
-    const botN = project(p.x, 0, p.zNear);
-    const topF = project(p.x, p.height, p.zFar);
-    const botF = project(p.x, 0, p.zFar);
-    if (!topN.ok || !botN.ok || !topF.ok || !botF.ok) return;
-    const fog = fogFactor(depth);
-    ctx.globalAlpha = fog;
-    ctx.fillStyle = p.color;
+function drawColumn(p) {
+  const depth = camera.z - p.z;
+  if (depth < 0 || depth > FAR_CLIP) return;
+  const fog = fogFactor(depth);
+  ctx.globalAlpha = fog;
+
+  const hw = 0.5;
+  const topL = project(p.x - hw, p.height, p.z);
+  const topR = project(p.x + hw, p.height, p.z);
+  const botR = project(p.x + hw, 0, p.z);
+  const botL = project(p.x - hw, 0, p.z);
+  if (!topL.ok || !topR.ok) { ctx.globalAlpha = 1; return; }
+
+  // fluted shaft
+  const grad = ctx.createLinearGradient(botL.sx, 0, botR.sx, 0);
+  grad.addColorStop(0, COL.cliffC);
+  grad.addColorStop(0.5, COL.cliffA);
+  grad.addColorStop(1, COL.cliffC);
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(botL.sx, botL.sy); ctx.lineTo(topL.sx, topL.sy);
+  ctx.lineTo(topR.sx, topR.sy); ctx.lineTo(botR.sx, botR.sy);
+  ctx.closePath(); ctx.fill();
+
+  ctx.strokeStyle = 'rgba(120,110,90,0.35)';
+  ctx.lineWidth = 1;
+  for (let k = 1; k < 4; k++) {
+    const fx = p.x - hw + (hw * 2) * (k / 4);
+    const a = project(fx, p.height, p.z);
+    const b = project(fx, 0, p.z);
+    if (a.ok && b.ok) { ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke(); }
+  }
+
+  // capital (top cap, wider)
+  const capHW = hw * 1.6, capH = 0.5;
+  const cTL = project(p.x - capHW, p.height + capH, p.z);
+  const cTR = project(p.x + capHW, p.height + capH, p.z);
+  if (cTL.ok && cTR.ok) {
+    ctx.fillStyle = COL.archDark;
     ctx.beginPath();
-    ctx.moveTo(botN.sx, botN.sy);
-    ctx.lineTo(topN.sx, topN.sy);
-    ctx.lineTo(topF.sx, topF.sy);
-    ctx.lineTo(botF.sx, botF.sy);
-    ctx.closePath();
-    ctx.fill();
-    // subtle strata lines
-    ctx.strokeStyle = 'rgba(0,0,0,0.12)';
-    ctx.lineWidth = 1;
-    for (let k = 1; k < 4; k++) {
-      const ty = p.height * (k / 4);
-      const a = project(p.x, ty, p.zNear);
-      const b = project(p.x, ty, p.zFar);
-      if (a.ok && b.ok) {
-        ctx.beginPath();
-        ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke();
-      }
-    }
-    ctx.globalAlpha = 1;
-  } else if (p.type === 'arch') {
-    const depth = camera.z - p.z;
-    if (depth < 0 || depth > FAR_CLIP) return;
-    const s = p.scale;
-    const fog = fogFactor(depth);
-    ctx.globalAlpha = fog;
-    ctx.fillStyle = COL.arch;
-    ctx.strokeStyle = COL.archDark;
-    ctx.lineWidth = 2;
-    // left leg, right leg, top beam as quads facing camera
-    const legs = [[-6.4 * s, 6.4 * s, 1.1 * s], [6.4 * s, 6.4 * s, 1.1 * s]];
-    legs.forEach(([lx, ly, lhw]) => {
-      const tl = project(lx - lhw, ly * 2, p.z);
-      const tr = project(lx + lhw, ly * 2, p.z);
-      const br = project(lx + lhw, 0, p.z);
-      const bl = project(lx - lhw, 0, p.z);
-      if (tl.ok && tr.ok && br.ok && bl.ok) {
-        ctx.beginPath();
-        ctx.moveTo(bl.sx, bl.sy); ctx.lineTo(tl.sx, tl.sy); ctx.lineTo(tr.sx, tr.sy); ctx.lineTo(br.sx, br.sy);
-        ctx.closePath(); ctx.fill(); ctx.stroke();
-      }
-    });
-    const beamY = 12.8 * s;
-    const tl = project(-7.6 * s, beamY + 1.4 * s, p.z);
-    const tr = project(7.6 * s, beamY + 1.4 * s, p.z);
-    const br = project(7.6 * s, beamY - 1.4 * s, p.z);
-    const bl = project(-7.6 * s, beamY - 1.4 * s, p.z);
+    ctx.moveTo(topL.sx, topL.sy);
+    ctx.lineTo(cTL.sx, cTL.sy); ctx.lineTo(cTR.sx, cTR.sy); ctx.lineTo(topR.sx, topR.sy);
+    ctx.closePath(); ctx.fill();
+  }
+
+  // base (stylobate)
+  const bHW = hw * 1.4, bH = 0.3;
+  const bTL = project(p.x - bHW, bH, p.z);
+  const bTR = project(p.x + bHW, bH, p.z);
+  const bBR = project(p.x + bHW, 0, p.z);
+  const bBL = project(p.x - bHW, 0, p.z);
+  if (bTL.ok && bTR.ok) {
+    ctx.fillStyle = COL.archDark;
+    ctx.beginPath();
+    ctx.moveTo(bBL.sx, bBL.sy); ctx.lineTo(bTL.sx, bTL.sy); ctx.lineTo(bTR.sx, bTR.sy); ctx.lineTo(bBR.sx, bBR.sy);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawTemple(p) {
+  const depth = camera.z - p.z;
+  if (depth < 0 || depth > FAR_CLIP) return;
+  const s = p.scale;
+  const fog = fogFactor(depth);
+  ctx.globalAlpha = fog;
+  ctx.fillStyle = COL.arch;
+  ctx.strokeStyle = COL.archDark;
+  ctx.lineWidth = 2;
+
+  const legs = [[-6.4 * s, 6.4 * s, 0.6 * s], [6.4 * s, 6.4 * s, 0.6 * s]];
+  legs.forEach(([lx, ly, lhw]) => {
+    const tl = project(lx - lhw, ly * 2, p.z);
+    const tr = project(lx + lhw, ly * 2, p.z);
+    const br = project(lx + lhw, 0, p.z);
+    const bl = project(lx - lhw, 0, p.z);
     if (tl.ok && tr.ok && br.ok && bl.ok) {
       ctx.beginPath();
       ctx.moveTo(bl.sx, bl.sy); ctx.lineTo(tl.sx, tl.sy); ctx.lineTo(tr.sx, tr.sy); ctx.lineTo(br.sx, br.sy);
       ctx.closePath(); ctx.fill(); ctx.stroke();
     }
-    ctx.globalAlpha = 1;
+  });
+
+  const beamY = 12.8 * s;
+  const tl = project(-7.6 * s, beamY + 1.4 * s, p.z);
+  const tr = project(7.6 * s, beamY + 1.4 * s, p.z);
+  const br = project(7.6 * s, beamY - 1.4 * s, p.z);
+  const bl = project(-7.6 * s, beamY - 1.4 * s, p.z);
+  if (tl.ok && tr.ok && br.ok && bl.ok) {
+    ctx.beginPath();
+    ctx.moveTo(bl.sx, bl.sy); ctx.lineTo(tl.sx, tl.sy); ctx.lineTo(tr.sx, tr.sy); ctx.lineTo(br.sx, br.sy);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
   }
+
+  // triangular pediment above the architrave
+  const apex = project(0, beamY + 1.4 * s + 3.2 * s, p.z);
+  const pedL = project(-7.6 * s, beamY + 1.4 * s, p.z);
+  const pedR = project(7.6 * s, beamY + 1.4 * s, p.z);
+  if (apex.ok && pedL.ok && pedR.ok) {
+    ctx.fillStyle = COL.cliffA;
+    ctx.beginPath();
+    ctx.moveTo(pedL.sx, pedL.sy); ctx.lineTo(apex.sx, apex.sy); ctx.lineTo(pedR.sx, pedR.sy);
+    ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawSceneryPiece(p) {
+  if (p.type === 'column') drawColumn(p);
+  else if (p.type === 'temple') drawTemple(p);
 }
 
 function drawBackground() {
@@ -229,7 +262,7 @@ function drawLaneLines() {
   [-1.1, 1.1, -3.5, 3.5].forEach((lx, i) => {
     const near = project(lx, 0, camera.z - 1.5);
     if (!near.ok) return;
-    ctx.strokeStyle = i < 2 ? 'rgba(255,255,255,0.16)' : 'rgba(60,20,5,0.18)';
+    ctx.strokeStyle = i < 2 ? 'rgba(255,255,255,0.35)' : 'rgba(120,110,90,0.22)';
     ctx.lineWidth = i < 2 ? 2.5 : 6;
     ctx.beginPath();
     ctx.moveTo(near.sx, near.sy);
@@ -243,7 +276,7 @@ function drawLaneLines() {
 // world unit, from project()) to get pixel dimensions — never raw pixels.
 const SOLDIER_W = 0.52, SOLDIER_H = 0.95, SOLDIER_HEAD_R = 0.22, SOLDIER_BOB = 0.07;
 
-function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popScale, bobT) {
+function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popScale, bobT, crestColor) {
   const s = scale * (popScale === undefined ? 1 : popScale);
   if (s < 1) return;
   const bodyW = SOLDIER_W * s, bodyH = SOLDIER_H * s;
@@ -258,25 +291,54 @@ function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popSca
   ctx.ellipse(0, bodyH * 0.48, bodyW * 0.5, bodyW * 0.18, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
-  // body
+  // round hoplite shield, behind the body on one side
+  ctx.fillStyle = colorBodyDark;
+  ctx.beginPath();
+  ctx.ellipse(-bodyW * 0.46, bodyH * 0.05, bodyW * 0.32, bodyW * 0.38, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = crestColor || '#c0392b';
+  ctx.lineWidth = Math.max(1, bodyW * 0.05);
+  ctx.stroke();
+  // tunic flare (pteruges skirt)
+  ctx.fillStyle = colorBodyDark;
+  ctx.beginPath();
+  ctx.moveTo(-bodyW * 0.42, bodyH * 0.4);
+  ctx.lineTo(bodyW * 0.42, bodyH * 0.4);
+  ctx.lineTo(bodyW * 0.5, bodyH * 0.6);
+  ctx.lineTo(-bodyW * 0.5, bodyH * 0.6);
+  ctx.closePath();
+  ctx.fill();
+  // body (bronze cuirass)
   const grad = ctx.createLinearGradient(-bodyW / 2, 0, bodyW / 2, 0);
   grad.addColorStop(0, colorBodyDark);
   grad.addColorStop(0.5, colorBody);
   grad.addColorStop(1, colorBodyDark);
   ctx.fillStyle = grad;
-  roundRect(-bodyW / 2, -bodyH * 0.15, bodyW, bodyH * 0.6, bodyW * 0.32);
+  roundRect(-bodyW / 2, -bodyH * 0.15, bodyW, bodyH * 0.55, bodyW * 0.28);
   ctx.fill();
-  // head
+  // belt
+  ctx.fillStyle = colorBodyDark;
+  ctx.fillRect(-bodyW / 2, bodyH * 0.26, bodyW, bodyH * 0.06);
+  // head (Corinthian helmet)
   const headR = bodyW * 0.42;
+  const headY = -bodyH * 0.28;
   ctx.beginPath();
-  ctx.arc(0, -bodyH * 0.28, headR, 0, Math.PI * 2);
+  ctx.arc(0, headY, headR, 0, Math.PI * 2);
   ctx.fillStyle = colorBody;
   ctx.fill();
-  // visor
+  // crest (horsehair plume)
+  ctx.fillStyle = crestColor || '#c0392b';
+  ctx.beginPath();
+  ctx.ellipse(0, headY - headR * 0.95, headR * 1.15, headR * 0.4, 0, 0, Math.PI * 2);
+  ctx.fill();
+  // nose guard
+  ctx.fillStyle = colorBodyDark;
+  ctx.fillRect(-headR * 0.08, headY - headR * 0.1, headR * 0.16, headR * 0.9);
+  // eye-slit glow
   ctx.fillStyle = colorVisor;
   ctx.shadowColor = colorVisor;
   ctx.shadowBlur = 6 * s;
-  roundRect(-headR * 0.65, -bodyH * 0.32, headR * 1.3, headR * 0.5, headR * 0.25);
+  roundRect(-headR * 0.62, headY - headR * 0.32, headR * 1.24, headR * 0.4, headR * 0.2);
   ctx.fill();
   ctx.shadowBlur = 0;
   ctx.restore();
@@ -369,7 +431,7 @@ function drawPlayerSquad() {
     const pop = player.displayScale[it.idx];
     const fog = fogFactor(proj.depth);
     ctx.globalAlpha = fog;
-    drawSoldier(proj.sx, proj.sy, proj.scale, COL.blueBody, COL.blueBodyDark, COL.blueVisor, pop, it.bobT);
+    drawSoldier(proj.sx, proj.sy, proj.scale, COL.blueBody, COL.blueBodyDark, COL.blueVisor, pop, it.bobT, COL.heroCrest);
     ctx.globalAlpha = 1;
   }
 }
@@ -538,6 +600,16 @@ function drawGate(o) {
     const label = o.op === 'x2' ? 'x2' : o.op === 'x3' ? 'x3' : o.op === '+5' ? '+5' : '÷2';
     ctx.fillText(label, mid.sx, mid.sy);
     ctx.shadowBlur = 0;
+    // laurel wreath flanking the label
+    const r = mid.scale * 0.9;
+    ctx.strokeStyle = COL.laurel;
+    ctx.lineWidth = Math.max(1.5, mid.scale * 0.05);
+    ctx.beginPath();
+    ctx.arc(mid.sx, mid.sy, r, Math.PI * 0.65, Math.PI * 1.35);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.arc(mid.sx, mid.sy, r, -Math.PI * 0.35, Math.PI * 0.35);
+    ctx.stroke();
   }
   ctx.restore();
 }
@@ -552,7 +624,7 @@ function drawEnemyCluster(o) {
     const proj = project(it.wx, 0, it.wz);
     if (!proj.ok || proj.depth > FAR_CLIP || proj.depth < 0) continue;
     ctx.globalAlpha = fogFactor(proj.depth);
-    drawSoldier(proj.sx, proj.sy, proj.scale, COL.redBody, COL.redBodyDark, COL.redVisor, 1, runCycle * 8 + it.idx);
+    drawSoldier(proj.sx, proj.sy, proj.scale, COL.redBody, COL.redBodyDark, COL.redVisor, 1, runCycle * 8 + it.idx, COL.enemyCrest);
     ctx.globalAlpha = 1;
   }
 }
@@ -566,8 +638,8 @@ function drawCoinObstacle(o) {
   ctx.globalAlpha = 1;
 }
 
-// ---------- Boss ----------
-const BOSS_W = 6.4, BOSS_H = 2.7;
+// ---------- Boss: Talos, the bronze colossus of Greek myth ----------
+const BOSS_W = 4.6, BOSS_H = 3.6;
 let boss = null;
 function buildBoss() {
   return { x: 0, y: 0, z: BOSS_Z - 6, hp: 420, maxHp: 420, alive: true, shakeT: 0, spawnT: 0 };
@@ -589,75 +661,72 @@ function drawBoss() {
   // shadow
   ctx.globalAlpha = 0.3 * fog;
   ctx.fillStyle = '#000';
-  ctx.beginPath(); ctx.ellipse(0, 0.2 * s, 3.1 * s, 0.7 * s, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(0, 0.15 * s, 2.6 * s, 0.6 * s, 0, 0, Math.PI * 2); ctx.fill();
   ctx.globalAlpha = fog;
 
+  const legW = 0.85 * s, legH = 2.9 * s;
+  const legStep = Math.sin(boss.shakeT * 2.2) * 0.12 * s;
+  ctx.fillStyle = COL.goldDark;
+  ctx.fillRect(-1.15 * s - legW / 2, -legH + legStep, legW, legH);
+  ctx.fillRect(1.15 * s - legW / 2, -legH - legStep, legW, legH);
+
   const bw = BOSS_W * s, bh = BOSS_H * s;
+  const torsoBottomY = -legH;
+  const torsoTopY = torsoBottomY - bh;
+
+  // sword arm, raised — drawn first so the torso overlaps the shoulder joint
+  ctx.save();
+  ctx.translate(bw * 0.56, torsoTopY + bh * 0.18);
+  ctx.rotate(-0.65 + Math.sin(boss.shakeT * 6) * 0.06);
+  ctx.fillStyle = COL.goldDark;
+  ctx.fillRect(-0.32 * s, 0, 0.64 * s, 2.3 * s);
+  ctx.save();
+  ctx.translate(0, 2.3 * s);
+  ctx.fillStyle = '#dfe6ea';
+  ctx.beginPath();
+  ctx.moveTo(-0.16 * s, 0); ctx.lineTo(0.16 * s, 0); ctx.lineTo(0.08 * s, -2.3 * s); ctx.lineTo(-0.08 * s, -2.3 * s);
+  ctx.closePath(); ctx.fill();
+  ctx.fillStyle = COL.goldDark;
+  ctx.fillRect(-0.3 * s, -0.05 * s, 0.6 * s, 0.28 * s);
+  ctx.restore();
+  ctx.restore();
+
+  // shield arm
+  ctx.save();
+  ctx.translate(-bw * 0.58, torsoTopY + bh * 0.4);
+  ctx.rotate(0.15);
+  ctx.fillStyle = COL.goldDark;
+  ctx.fillRect(-0.3 * s, 0, 0.6 * s, 1.8 * s);
+  ctx.beginPath();
+  ctx.ellipse(0, 1.85 * s, 1.05 * s, 1.25 * s, 0, 0, Math.PI * 2);
+  ctx.fillStyle = COL.gold;
+  ctx.fill();
+  ctx.strokeStyle = COL.goldDark;
+  ctx.lineWidth = Math.max(1, 0.08 * s);
+  ctx.stroke();
+  ctx.restore();
+
+  // torso
   const grad = ctx.createLinearGradient(-bw / 2, 0, bw / 2, 0);
   grad.addColorStop(0, COL.goldDark); grad.addColorStop(0.5, COL.gold); grad.addColorStop(1, COL.goldDark);
-
-  // legs
-  ctx.fillStyle = COL.cliffB;
-  for (let i = 0; i < 6; i++) {
-    const side = i % 2 === 0 ? -1 : 1;
-    const lx = side * (bw * 0.42) - side * (Math.floor(i / 2) * 0.42 * s);
-    ctx.save();
-    ctx.translate(lx, -bh * 0.1 + Math.floor(i / 2) * 0.18 * s);
-    ctx.rotate(side * 0.5);
-    ctx.fillRect(-0.18 * s, -0.18 * s, 0.36 * s, 1.35 * s);
-    ctx.restore();
-  }
-
-  // tail (behind, drawn first so body overlaps base)
-  ctx.save();
-  ctx.translate(0, -bh * 0.3);
-  let tx = 0, ty = 0, trot = -0.3;
-  for (let i = 0; i < 4; i++) {
-    ctx.save();
-    ctx.translate(tx, ty);
-    ctx.rotate(trot);
-    const segW = (1.0 - i * 0.09) * s;
-    ctx.fillStyle = COL.gold;
-    roundRect(-segW / 2, -segW / 2, segW, segW, segW * 0.3);
-    ctx.fill();
-    ctx.restore();
-    tx += Math.sin(trot) * 0.88 * s;
-    ty -= Math.cos(trot) * 0.88 * s * 0.9;
-    trot -= 0.35;
-  }
-  // stinger
-  ctx.save();
-  ctx.translate(tx, ty);
-  ctx.rotate(trot);
-  ctx.fillStyle = COL.stinger;
-  ctx.shadowColor = COL.stinger;
-  ctx.shadowBlur = 14;
-  ctx.beginPath();
-  ctx.moveTo(-0.23 * s, 0); ctx.lineTo(0.23 * s, 0); ctx.lineTo(0, -0.76 * s); ctx.closePath();
-  ctx.fill();
-  ctx.shadowBlur = 0;
-  ctx.restore();
-  ctx.restore();
-
-  // body
   ctx.fillStyle = grad;
-  roundRect(-bw / 2, -bh * 0.55, bw, bh * 0.7, bh * 0.3);
+  roundRect(-bw / 2, torsoTopY, bw, bh, bw * 0.14);
   ctx.fill();
   ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-  ctx.lineWidth = Math.max(1, 2 * s / 20);
+  ctx.lineWidth = Math.max(1, 0.05 * s);
   ctx.stroke();
 
-  // cracks near death
+  // cracks near death, glowing molten-bronze ichor beneath
   const hpFrac = boss.hp / boss.maxHp;
   if (hpFrac < 0.6) {
     ctx.save();
     ctx.globalAlpha = fog * (1 - hpFrac) * 0.9;
     ctx.strokeStyle = '#3a2200';
-    ctx.lineWidth = Math.max(1, 1.5 * s / 20);
+    ctx.lineWidth = Math.max(1, 0.045 * s);
     for (let i = 0; i < 5; i++) {
       ctx.beginPath();
       const sx0 = (Math.random() - 0.5) * bw * 0.7;
-      const sy0 = (Math.random() - 0.5) * bh * 0.5;
+      const sy0 = torsoTopY + Math.random() * bh;
       ctx.moveTo(sx0, sy0);
       ctx.lineTo(sx0 + (Math.random() - 0.5) * 0.9 * s, sy0 + (Math.random() - 0.5) * 0.9 * s);
       ctx.stroke();
@@ -666,28 +735,31 @@ function drawBoss() {
     if (hpFrac < 0.3) {
       ctx.save();
       ctx.globalAlpha = fog * 0.5 * (Math.sin(boss.shakeT * 20) * 0.5 + 0.5);
-      ctx.fillStyle = '#fff6c8';
-      ctx.beginPath(); ctx.ellipse(0, -bh * 0.15, bw * 0.15, bh * 0.15, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = COL.stinger;
+      ctx.shadowColor = COL.stinger;
+      ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.ellipse(0, torsoTopY + bh * 0.4, bw * 0.15, bh * 0.12, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
       ctx.restore();
     }
   }
 
-  // head + pincers
+  // head, Corinthian-style helmet with crest
+  const headR = bw * 0.17;
+  const headY = torsoTopY - headR * 0.5;
   ctx.fillStyle = COL.gold;
-  roundRect(-bw * 0.14, -bh * 1.05, bw * 0.28, bh * 0.55, bh * 0.14);
-  ctx.fill();
-  ctx.save();
-  ctx.translate(-bw * 0.32, -bh * 0.95);
-  ctx.rotate(-0.4 + Math.sin(boss.shakeT * 6) * 0.08);
-  roundRect(-bw * 0.1, -bh * 0.16, bw * 0.22, bh * 0.3, bh * 0.1);
-  ctx.fill();
-  ctx.restore();
-  ctx.save();
-  ctx.translate(bw * 0.32, -bh * 0.95);
-  ctx.rotate(0.4 - Math.sin(boss.shakeT * 6) * 0.08);
-  roundRect(-bw * 0.12, -bh * 0.16, bw * 0.22, bh * 0.3, bh * 0.1);
-  ctx.fill();
-  ctx.restore();
+  ctx.beginPath(); ctx.arc(0, headY, headR, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#8b2e1f';
+  ctx.beginPath(); ctx.ellipse(0, headY - headR * 1.0, headR * 1.3, headR * 0.5, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = COL.goldDark;
+  ctx.fillRect(-headR * 0.1, headY - headR * 0.1, headR * 0.2, headR * 0.9);
+  // glowing molten eyes
+  ctx.fillStyle = COL.stinger;
+  ctx.shadowColor = COL.stinger;
+  ctx.shadowBlur = 14;
+  ctx.beginPath(); ctx.ellipse(-headR * 0.34, headY, headR * 0.16, headR * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(headR * 0.34, headY, headR * 0.16, headR * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
 
   ctx.restore();
 }
@@ -696,7 +768,7 @@ function enterBossFight() {
   state.mode = 'boss';
   boss = buildBoss();
   els.bossHudWrap.classList.remove('hidden');
-  toast('¡JEFE!');
+  toast('¡TALOS!');
 }
 
 function updateBoss(dt) {
@@ -803,14 +875,14 @@ function showScreen(el) {
 function gameOver() {
   state.mode = 'gameover';
   AudioFX.gameOver();
-  els.goStats.textContent = `Distancia recorrida: ${Math.round(Math.abs(player.z - WORLD_START_Z))}m · Monedas: ${state.coins}`;
+  els.goStats.textContent = `Distancia recorrida: ${Math.round(Math.abs(player.z - WORLD_START_Z))}m · Dracmas: ${state.coins}`;
   showScreen(els.screenGameOver);
 }
 
 function victory() {
   state.mode = 'victory';
   AudioFX.victory();
-  els.vicStats.textContent = `Escuadrón final: ${player.count} · Monedas: ${state.coins}`;
+  els.vicStats.textContent = `Falange final: ${player.count} guerreros · Dracmas: ${state.coins}`;
   showScreen(els.screenVictory);
 }
 

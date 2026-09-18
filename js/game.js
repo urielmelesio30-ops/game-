@@ -982,6 +982,8 @@ function drawLaneLines() {
 // Bare-chested torso, kilt, bronze Corinthian helmet, horsehair crest, a
 // shield slung on the back, and a cape that flows on the side the camera
 // actually sees (the runners' backs, since the camera trails behind them).
+const SPEAR_WOOD = '#6b4a2a', SPEAR_WOOD_DARK = '#3f2c18';
+
 function buildSoldierParts(S, variant, metal, metalDark, bobT) {
   const parts = [];
   const skirtHalf = [0.26 * S, 0.28 * S, 0.22 * S];
@@ -991,19 +993,40 @@ function buildSoldierParts(S, variant, metal, metalDark, bobT) {
   const torsoCenterY = 0.56 * S + torsoHalf[1];
   parts.push({ center: [0, torsoCenterY, 0], half: torsoHalf, color: variant.skin });
 
+  // pteruges — a fringe of little leather straps at the waist line, the
+  // detail that breaks up a plain box torso when seen from behind
+  const waistY = 0.56 * S;
+  for (let i = -2; i <= 2; i++) {
+    parts.push({
+      center: [i * 0.1 * S, waistY - 0.02 * S, torsoHalf[2] * 0.75], half: [0.045 * S, 0.08 * S, 0.03 * S],
+      color: i % 2 === 0 ? variant.skinDark : variant.cape,
+    });
+  }
+
   const headHalf = [0.17 * S, 0.17 * S, 0.17 * S];
   const headCenterY = torsoCenterY + torsoHalf[1] + headHalf[1] + 0.04 * S;
-  parts.push({ center: [0, headCenterY, 0], half: headHalf, color: metal, colorDark: metalDark });
+  parts.push({ center: [0, headCenterY, 0], half: headHalf, color: metal });
+  // helmet rim flare at the base — turns the plain cube into a recognizable
+  // helmet silhouette from any angle, including from behind
+  parts.push({ center: [0, headCenterY - headHalf[1] * 0.82, 0], half: [headHalf[0] * 1.3, headHalf[1] * 0.22, headHalf[2] * 1.3], color: metalDark });
   parts.push({
     center: [0, headCenterY + headHalf[1] + 0.1 * S, 0.02 * S], half: [0.07 * S, 0.13 * S, 0.32 * S], color: variant.crest,
   });
 
   // shield, slung on the back — mostly facing the camera since that's the
   // visible side of a runner moving away into the level
+  const shieldCenter = [-0.05 * S, torsoCenterY + 0.05 * S, torsoHalf[2] + 0.1 * S];
+  const shieldNormal = [-0.25, 0.05, 0.95];
   parts.push({
-    kind: 'disc', center: [-0.05 * S, torsoCenterY + 0.05 * S, torsoHalf[2] + 0.1 * S],
-    normalAxis: [-0.25, 0.05, 0.95], radius: 0.44 * S, segments: 10, color: metal,
+    kind: 'disc', center: shieldCenter, normalAxis: shieldNormal, radius: 0.44 * S, segments: 10, color: metal,
   });
+
+  // a spear slung across the back, its head rising past the shoulder
+  const spearBase = [0.32 * S, 0.42 * S, torsoHalf[2] * 0.6];
+  const spearRot = { axis: 'x', angle: -0.18, pivot: spearBase };
+  parts.push({ center: [spearBase[0], spearBase[1] + 0.75 * S, spearBase[2]], half: [0.035 * S, 0.75 * S, 0.035 * S], color: SPEAR_WOOD, rot: spearRot });
+  parts.push({ center: [spearBase[0], spearBase[1] + 1.62 * S, spearBase[2]], half: [0.06 * S, 0.16 * S, 0.03 * S], color: metal, rot: spearRot });
+  parts.push({ center: [spearBase[0], spearBase[1] + 0.2 * S, spearBase[2]], half: [0.05 * S, 0.1 * S, 0.05 * S], color: SPEAR_WOOD_DARK, rot: spearRot });
 
   // cape — flows down the back with a slow cloth-lag sway, independent of
   // the faster running bob
@@ -1022,10 +1045,10 @@ function buildSoldierParts(S, variant, metal, metalDark, bobT) {
     color: variant.cape,
   });
 
-  return parts;
+  return { parts, shieldCenter, shieldNormal };
 }
 
-function drawSoldierActor(worldX, worldZ, S, variant, metal, metalDark, bobT) {
+function drawSoldierActor(worldX, worldZ, S, variant, metal, metalDark, bobT, emblem) {
   const shadowProj = project(worldX, 0.02, worldZ);
   if (shadowProj.ok) {
     ctx.globalAlpha *= 0.28;
@@ -1036,7 +1059,34 @@ function drawSoldierActor(worldX, worldZ, S, variant, metal, metalDark, bobT) {
     ctx.globalAlpha /= 0.28;
   }
   const bob = Math.abs(Math.sin(bobT)) * 0.05 * S;
-  drawActor3D({ x: worldX, y: bob, z: worldZ }, buildSoldierParts(S, variant, metal, metalDark, bobT), { outline: true });
+  const actor = { x: worldX, y: bob, z: worldZ };
+  const rig = buildSoldierParts(S, variant, metal, metalDark, bobT);
+  drawActor3D(actor, rig.parts, { outline: true });
+
+  // a shield emblem — cheap 2D overlay projected onto the shield's center,
+  // the one detail that instantly reads as "Spartan" rather than "box army"
+  if (emblem) {
+    const sc = rig.shieldCenter;
+    const proj = project(sc[0] + actor.x, sc[1] + actor.y, sc[2] + actor.z);
+    if (proj.ok) {
+      const s = proj.scale * S;
+      ctx.save();
+      ctx.translate(proj.sx, proj.sy);
+      ctx.strokeStyle = 'rgba(20,14,8,0.55)';
+      ctx.lineWidth = Math.max(1, s * 0.045);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      if (emblem === 'lambda') {
+        ctx.moveTo(0, -0.22 * s); ctx.lineTo(-0.16 * s, 0.22 * s);
+        ctx.moveTo(0, -0.22 * s); ctx.lineTo(0.16 * s, 0.22 * s);
+      } else { // enemy mark: a jagged scar-like slash
+        ctx.moveTo(-0.16 * s, -0.18 * s); ctx.lineTo(0.14 * s, 0.05 * s);
+        ctx.moveTo(0.14 * s, 0.05 * s); ctx.lineTo(-0.08 * s, 0.2 * s);
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
 }
 
 const COIN_R = 0.17;
@@ -1142,7 +1192,7 @@ function drawPlayerSquad() {
     const variant = HERO_VARIANTS[it.idx % HERO_VARIANTS.length];
     const metalTint = 0.86 + ((it.idx * 53) % 17) / 17 * 0.3;
     ctx.globalAlpha = fogFactor(proj.depth);
-    drawSoldierActor(it.wx, it.wz, pop * jitter, variant, shadeColor(armor.body, metalTint), shadeColor(armor.bodyDark, metalTint), it.bobT);
+    drawSoldierActor(it.wx, it.wz, pop * jitter, variant, shadeColor(armor.body, metalTint), shadeColor(armor.bodyDark, metalTint), it.bobT, 'lambda');
     ctx.globalAlpha = 1;
   }
 }
@@ -1366,7 +1416,7 @@ function drawEnemyCluster(o) {
     const variant = etype.variants[it.idx % etype.variants.length];
     const metalTint = 0.86 + ((it.idx * 53) % 17) / 17 * 0.3;
     ctx.globalAlpha = fogFactor(proj.depth);
-    drawSoldierActor(it.wx, it.wz, etype.sizeMult * jitter, variant, shadeColor(etype.metal, metalTint), shadeColor(etype.metalDark, metalTint), runCycle * 8 + it.idx);
+    drawSoldierActor(it.wx, it.wz, etype.sizeMult * jitter, variant, shadeColor(etype.metal, metalTint), shadeColor(etype.metalDark, metalTint), runCycle * 8 + it.idx, 'scar');
     ctx.globalAlpha = 1;
   }
 }

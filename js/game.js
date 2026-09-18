@@ -58,6 +58,147 @@ function fogFactor(depth) {
   return Math.max(0, Math.min(1, f));
 }
 
+// ---------- Mini 3D engine ----------
+// Real 3D geometry (boxes + N-gon discs), not flat sprites: each part is
+// authored in local world-unit coordinates relative to an actor's ground
+// point, optionally rotated around a pivot (for limbs/weapons), placed in
+// world space, then every face is perspective-projected via project(),
+// back-face-culled, lit by a fixed "sun" direction, and all faces from all
+// parts are painter's-algorithm sorted together so overlapping limbs occlude
+// correctly.
+const LIGHT_DIR = vnorm([-0.45, 0.8, 0.35]);
+const VIEW_DIR = vnorm([0, -0.3, 1]);
+
+function vnorm(v) {
+  const l = Math.hypot(v[0], v[1], v[2]) || 1;
+  return [v[0] / l, v[1] / l, v[2] / l];
+}
+function vdot(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
+function vadd(a, b) { return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]; }
+function vsub(a, b) { return [a[0] - b[0], a[1] - b[1], a[2] - b[2]]; }
+
+function rotateAxis(p, axis, angle) {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  const [x, y, z] = p;
+  if (axis === 'x') return [x, y * c - z * s, y * s + z * c];
+  if (axis === 'y') return [x * c + z * s, y, -x * s + z * c];
+  return [x * c - y * s, x * s + y * c, z]; // 'z'
+}
+function rotateAroundPivot(p, pivot, axis, angle) {
+  return vadd(rotateAxis(vsub(p, pivot), axis, angle), pivot);
+}
+
+// Unit-cube corner offsets (scaled by half-extents) and face definitions,
+// shared by every box — only the half-extents/center/rotation differ per part.
+const BOX_FACES = [
+  { idx: [0, 1, 2, 3], n: [0, 0, -1] },  // back
+  { idx: [4, 5, 6, 7], n: [0, 0, 1] },   // front
+  { idx: [0, 3, 7, 4], n: [-1, 0, 0] },  // left
+  { idx: [1, 5, 6, 2], n: [1, 0, 0] },   // right
+  { idx: [0, 4, 5, 1], n: [0, -1, 0] },  // bottom
+  { idx: [3, 2, 6, 7], n: [0, 1, 0] },   // top
+];
+function boxCorners(cx, cy, cz, hw, hh, hd) {
+  return [
+    [cx - hw, cy - hh, cz - hd], [cx + hw, cy - hh, cz - hd], [cx + hw, cy + hh, cz - hd], [cx - hw, cy + hh, cz - hd],
+    [cx - hw, cy - hh, cz + hd], [cx + hw, cy - hh, cz + hd], [cx + hw, cy + hh, cz + hd], [cx - hw, cy + hh, cz + hd],
+  ];
+}
+
+function shadeColor(hex, factor) {
+  const n = parseInt(hex.slice(1), 16);
+  let r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  r = Math.max(0, Math.min(255, Math.round(r * factor)));
+  g = Math.max(0, Math.min(255, Math.round(g * factor)));
+  b = Math.max(0, Math.min(255, Math.round(b * factor)));
+  return `rgb(${r},${g},${b})`;
+}
+
+// Appends a box part's visible faces (world-projected) to `out`.
+function pushBoxFaces(out, actor, part) {
+  const [cx, cy, cz] = part.center;
+  const [hw, hh, hd] = part.half;
+  let corners = boxCorners(cx, cy, cz, hw, hh, hd);
+  let xformNormal = (n) => n;
+  if (part.rot) {
+    const { axis, angle, pivot } = part.rot;
+    corners = corners.map(p => rotateAroundPivot(p, pivot, axis, angle));
+    xformNormal = (n) => rotateAxis(n, axis, angle);
+  }
+  const world = corners.map(p => [p[0] + actor.x, p[1] + actor.y, p[2] + actor.z]);
+  for (const face of BOX_FACES) {
+    const wn = xformNormal(face.n);
+    if (vdot(wn, VIEW_DIR) < 0.04) continue;
+    const proj = face.idx.map(i => project(world[i][0], world[i][1], world[i][2]));
+    if (proj.some(pp => !pp.ok)) continue;
+    const depth = (proj[0].depth + proj[1].depth + proj[2].depth + proj[3].depth) / 4;
+    const light = Math.max(0.32, Math.min(1.15, vdot(wn, LIGHT_DIR) * 0.85 + 0.45));
+    out.push({ depth, pts: proj, color: shadeColor(part.color, light) });
+  }
+}
+
+// Appends an N-gon disc part's single visible face (a shield, etc).
+function pushDiscFace(out, actor, part) {
+  const [cx, cy, cz] = part.center;
+  const segs = part.segments || 10;
+  const axis = vnorm(part.normalAxis);
+  // build two basis vectors perpendicular to axis
+  const up = Math.abs(axis[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  let bx = vnorm([up[1] * axis[2] - up[2] * axis[1], up[2] * axis[0] - up[0] * axis[2], up[0] * axis[1] - up[1] * axis[0]]);
+  let by = [axis[1] * bx[2] - axis[2] * bx[1], axis[2] * bx[0] - axis[0] * bx[2], axis[0] * bx[1] - axis[1] * bx[0]];
+  let local = [];
+  for (let i = 0; i < segs; i++) {
+    const t = (i / segs) * Math.PI * 2;
+    const r = part.radius;
+    local.push([
+      cx + (bx[0] * Math.cos(t) + by[0] * Math.sin(t)) * r,
+      cy + (bx[1] * Math.cos(t) + by[1] * Math.sin(t)) * r,
+      cz + (bx[2] * Math.cos(t) + by[2] * Math.sin(t)) * r,
+    ]);
+  }
+  let normal = axis;
+  if (part.rot) {
+    const { axis: rotAxis, angle, pivot } = part.rot;
+    local = local.map(p => rotateAroundPivot(p, pivot, rotAxis, angle));
+    normal = rotateAxis(normal, rotAxis, angle);
+  }
+  if (vdot(normal, VIEW_DIR) < 0.04) return;
+  const world = local.map(p => [p[0] + actor.x, p[1] + actor.y, p[2] + actor.z]);
+  const proj = world.map(p => project(p[0], p[1], p[2]));
+  if (proj.some(pp => !pp.ok)) return;
+  const depth = proj.reduce((s, pp) => s + pp.depth, 0) / proj.length;
+  const light = Math.max(0.32, Math.min(1.15, vdot(normal, LIGHT_DIR) * 0.85 + 0.45));
+  out.push({ depth, pts: proj, color: shadeColor(part.color, light) });
+  if (part.rim) {
+    const rimLight = Math.min(1.15, light * 1.1);
+    out.push({ depth: depth - 0.01, pts: proj.map(p => ({ sx: p.sx, sy: p.sy })), color: null, strokeOnly: part.rim, lineWidth: proj[0].scale * 0.05 });
+  }
+}
+
+// Draws a full actor (array of box/disc parts) as a depth-sorted face list.
+function drawActor3D(actor, parts) {
+  const faces = [];
+  for (const part of parts) {
+    if (part.kind === 'disc') pushDiscFace(faces, actor, part);
+    else pushBoxFaces(faces, actor, part);
+  }
+  faces.sort((a, b) => b.depth - a.depth); // farthest first (painter's algorithm)
+  for (const f of faces) {
+    ctx.beginPath();
+    ctx.moveTo(f.pts[0].sx, f.pts[0].sy);
+    for (let i = 1; i < f.pts.length; i++) ctx.lineTo(f.pts[i].sx, f.pts[i].sy);
+    ctx.closePath();
+    if (f.strokeOnly) {
+      ctx.strokeStyle = f.strokeOnly;
+      ctx.lineWidth = Math.max(1, f.lineWidth);
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = f.color;
+      ctx.fill();
+    }
+  }
+}
+
 // ---------- Colors (marble temple / Greek theme) ----------
 const COL = {
   sky1: '#cfe8ff', sky2: '#8fc6ee', sky3: '#4a90d9',
@@ -747,7 +888,6 @@ function drawCoinObstacle(o) {
 // Each boss reuses the same humanoid rig but is driven by a BOSS_THEMES
 // entry (colors, weapon, size, HP, name) so every encounter is visibly its
 // own creature.
-const BOSS_W = 4.6, BOSS_H = 3.6;
 let boss = null;
 let bossCheckpointIndex = 0;
 let nextCheckpoint = 0; // index into bossCheckpoints of the next one to trigger
@@ -760,160 +900,142 @@ function buildBoss(checkpoint) {
   };
 }
 
-// Draws the "business end" of the boss's weapon at the tip of the raised
-// arm (already translated/rotated there by the caller).
-function drawWeaponHead(type, s, metalColor, darkColor) {
-  if (type === 'axe') {
-    ctx.fillStyle = metalColor;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(0.75 * s, -0.5 * s); ctx.lineTo(0.55 * s, -1.3 * s); ctx.lineTo(0, -0.7 * s);
-    ctx.lineTo(-0.55 * s, -1.3 * s); ctx.lineTo(-0.75 * s, -0.5 * s);
-    ctx.closePath(); ctx.fill();
-    ctx.strokeStyle = darkColor;
-    ctx.lineWidth = Math.max(1, 0.05 * s);
-    ctx.stroke();
-  } else if (type === 'hammer') {
-    ctx.fillStyle = metalColor;
-    roundRect(-0.5 * s, -1.5 * s, 1.0 * s, 1.0 * s, 0.18 * s);
-    ctx.fill();
-    ctx.strokeStyle = darkColor;
-    ctx.lineWidth = Math.max(1, 0.05 * s);
-    ctx.stroke();
+// Builds the boss's rigid parts list in world units (real 3D boxes/discs,
+// not flat sprites) for the given animation time. `theme.scale` uniformly
+// scales every dimension so each boss theme reads as a different-sized
+// creature.
+function buildBossParts(theme, shakeT, hpFrac) {
+  const S = theme.scale;
+  const parts = [];
+
+  const legHalf = [0.22 * S, 0.75 * S, 0.24 * S];
+  const legY = 0.75 * S;
+  parts.push({ center: [-0.42 * S, legY, 0], half: legHalf, color: theme.bodyDark });
+  parts.push({ center: [0.42 * S, legY, 0], half: legHalf, color: theme.bodyDark });
+
+  const legTop = 1.5 * S;
+  const torsoHalf = [1.05 * S, 0.85 * S, 0.55 * S];
+  const torsoCenterY = legTop + torsoHalf[1];
+  const torsoTop = torsoCenterY + torsoHalf[1];
+
+  // Shield arm + shield (left / -X side)
+  const shoulderL = [-1.15 * S, torsoCenterY + 0.3 * S, 0.1 * S];
+  const armHalf = [0.2 * S, 0.55 * S, 0.2 * S];
+  const shieldRot = { axis: 'z', angle: 0.2 + Math.sin(shakeT * 2) * 0.03, pivot: shoulderL };
+  parts.push({ center: [shoulderL[0], shoulderL[1] - armHalf[1], shoulderL[2]], half: armHalf, color: theme.bodyDark, rot: shieldRot });
+  parts.push({
+    kind: 'disc', center: [shoulderL[0] - 0.15 * S, shoulderL[1] - 0.55 * S, shoulderL[2] + 0.25 * S],
+    normalAxis: [-0.82, 0.05, 0.45], radius: 0.72 * S, segments: 10, color: theme.shield, rot: null,
+  });
+
+  // Weapon arm + weapon head (right / +X side), raised in a battle stance
+  const shoulderR = [1.15 * S, torsoCenterY + 0.35 * S, 0.1 * S];
+  const swingAngle = 2.25 + Math.sin(shakeT * 6) * 0.09;
+  const weaponArmHalf = [0.2 * S, 0.6 * S, 0.2 * S];
+  const armRot = { axis: 'z', angle: swingAngle, pivot: shoulderR };
+  parts.push({ center: [shoulderR[0], shoulderR[1] - weaponArmHalf[1], shoulderR[2]], half: weaponArmHalf, color: theme.bodyDark, rot: armRot });
+
+  const tip = [shoulderR[0], shoulderR[1] - weaponArmHalf[1] * 2, shoulderR[2]];
+  if (theme.weapon === 'axe') {
+    parts.push({ center: [tip[0], tip[1] - 0.35 * S, tip[2]], half: [0.12 * S, 0.35 * S, 0.12 * S], color: theme.metal, rot: armRot });
+    parts.push({ center: [tip[0] + 0.32 * S, tip[1] - 0.55 * S, tip[2]], half: [0.3 * S, 0.28 * S, 0.06 * S], color: theme.metal, rot: armRot });
+    parts.push({ center: [tip[0] - 0.32 * S, tip[1] - 0.55 * S, tip[2]], half: [0.3 * S, 0.28 * S, 0.06 * S], color: theme.metal, rot: armRot });
+  } else if (theme.weapon === 'hammer') {
+    parts.push({ center: [tip[0], tip[1] - 0.55 * S, tip[2]], half: [0.4 * S, 0.4 * S, 0.4 * S], color: theme.metal, rot: armRot });
   } else { // sword
-    ctx.fillStyle = metalColor;
-    ctx.beginPath();
-    ctx.moveTo(-0.16 * s, 0); ctx.lineTo(0.16 * s, 0); ctx.lineTo(0.08 * s, -2.3 * s); ctx.lineTo(-0.08 * s, -2.3 * s);
-    ctx.closePath(); ctx.fill();
-    ctx.fillStyle = darkColor;
-    ctx.fillRect(-0.3 * s, -0.05 * s, 0.6 * s, 0.28 * s);
+    parts.push({ center: [tip[0], tip[1] - 0.55 * S, tip[2]], half: [0.09 * S, 0.55 * S, 0.05 * S], color: theme.metal, rot: armRot });
+    parts.push({ center: [tip[0], tip[1] - 0.08 * S, tip[2]], half: [0.26 * S, 0.06 * S, 0.1 * S], color: theme.bodyDark, rot: armRot });
   }
+
+  // Torso
+  parts.push({ center: [0, torsoCenterY, 0], half: torsoHalf, color: theme.body });
+
+  // Head + Corinthian helmet crest
+  const headHalf = [0.34 * S, 0.32 * S, 0.34 * S];
+  const headCenterY = torsoTop + headHalf[1] + 0.08 * S;
+  parts.push({ center: [0, headCenterY, 0], half: headHalf, color: theme.body });
+  parts.push({
+    center: [0, headCenterY + headHalf[1] + 0.16 * S, -0.02 * S], half: [0.42 * S, 0.16 * S, 0.58 * S], color: theme.crest,
+    rot: { axis: 'x', angle: -0.3, pivot: [0, headCenterY + headHalf[1], 0] },
+  });
+  parts.push({ center: [0, headCenterY - 0.02 * S, headHalf[2] * 0.7], half: [0.06 * S, 0.26 * S, 0.05 * S], color: theme.bodyDark });
+
+  return { parts, torsoCenterY, torsoHalf, headCenterY };
 }
 
 function drawBoss() {
   if (!boss) return;
   const theme = boss.theme;
-  const proj = project(boss.x, 0, boss.z);
-  if (!proj.ok) return;
-  const s = proj.scale * theme.scale;
-  const fog = fogFactor(proj.depth);
-  ctx.save();
-  ctx.globalAlpha = fog;
-  ctx.translate(proj.sx, proj.sy);
-
-  const shakeX = Math.sin(boss.shakeT * 42) * 0.03 * s;
-  ctx.translate(shakeX, 0);
-
-  // shadow
-  ctx.globalAlpha = 0.3 * fog;
-  ctx.fillStyle = '#000';
-  ctx.beginPath(); ctx.ellipse(0, 0.15 * s, 2.6 * s, 0.6 * s, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.globalAlpha = fog;
-
-  const legW = 0.85 * s, legH = 2.9 * s;
-  const legStep = Math.sin(boss.shakeT * 2.2) * 0.12 * s;
-  ctx.fillStyle = theme.bodyDark;
-  ctx.fillRect(-1.15 * s - legW / 2, -legH + legStep, legW, legH);
-  ctx.fillRect(1.15 * s - legW / 2, -legH - legStep, legW, legH);
-
-  const bw = BOSS_W * s, bh = BOSS_H * s;
-  const torsoBottomY = -legH;
-  const torsoTopY = torsoBottomY - bh;
-
-  // weapon arm, raised — drawn first so the torso overlaps the shoulder joint
-  ctx.save();
-  ctx.translate(bw * 0.56, torsoTopY + bh * 0.18);
-  ctx.rotate(-0.65 + Math.sin(boss.shakeT * 6) * 0.06);
-  ctx.fillStyle = theme.bodyDark;
-  ctx.fillRect(-0.32 * s, 0, 0.64 * s, 2.3 * s);
-  ctx.save();
-  ctx.translate(0, 2.3 * s);
-  drawWeaponHead(theme.weapon, s, theme.metal, theme.bodyDark);
-  ctx.restore();
-  ctx.restore();
-
-  // shield arm
-  ctx.save();
-  ctx.translate(-bw * 0.58, torsoTopY + bh * 0.4);
-  ctx.rotate(0.15);
-  ctx.fillStyle = theme.bodyDark;
-  ctx.fillRect(-0.3 * s, 0, 0.6 * s, 1.8 * s);
-  ctx.beginPath();
-  ctx.ellipse(0, 1.85 * s, 1.05 * s, 1.25 * s, 0, 0, Math.PI * 2);
-  ctx.fillStyle = theme.shield;
-  ctx.fill();
-  ctx.strokeStyle = theme.shieldDark;
-  ctx.lineWidth = Math.max(1, 0.08 * s);
-  ctx.stroke();
-  ctx.restore();
-
-  // torso
-  const grad = ctx.createLinearGradient(-bw / 2, 0, bw / 2, 0);
-  grad.addColorStop(0, theme.bodyDark); grad.addColorStop(0.5, theme.body); grad.addColorStop(1, theme.bodyDark);
-  ctx.fillStyle = grad;
-  roundRect(-bw / 2, torsoTopY, bw, bh, bw * 0.14);
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
-  ctx.lineWidth = Math.max(1, 0.05 * s);
-  ctx.stroke();
-  // torso sheen for a rounder, less flat look
-  ctx.save();
-  ctx.beginPath();
-  roundRect(-bw / 2, torsoTopY, bw, bh, bw * 0.14);
-  ctx.clip();
-  const sheen = ctx.createLinearGradient(-bw * 0.3, torsoTopY, bw * 0.05, torsoTopY);
-  sheen.addColorStop(0, 'rgba(255,255,255,0.22)');
-  sheen.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = sheen;
-  ctx.fillRect(-bw / 2, torsoTopY, bw * 0.5, bh);
-  ctx.restore();
-
-  // cracks near death, glowing molten ichor beneath
+  const projCheck = project(boss.x, 0, boss.z);
+  if (!projCheck.ok) return;
+  const fog = fogFactor(projCheck.depth);
   const hpFrac = boss.hp / boss.maxHp;
-  if (hpFrac < 0.6) {
+
+  const rig = buildBossParts(theme, boss.shakeT, hpFrac);
+  const shakeOffset = Math.sin(boss.shakeT * 42) * 0.025;
+  const actor = { x: boss.x + shakeOffset, y: boss.y, z: boss.z };
+
+  // ground shadow
+  const shadowProj = project(boss.x, 0.02, boss.z);
+  if (shadowProj.ok) {
     ctx.save();
-    ctx.globalAlpha = fog * (1 - hpFrac) * 0.9;
-    ctx.strokeStyle = '#3a2200';
-    ctx.lineWidth = Math.max(1, 0.045 * s);
-    for (let i = 0; i < 5; i++) {
-      ctx.beginPath();
-      const sx0 = (Math.random() - 0.5) * bw * 0.7;
-      const sy0 = torsoTopY + Math.random() * bh;
-      ctx.moveTo(sx0, sy0);
-      ctx.lineTo(sx0 + (Math.random() - 0.5) * 0.9 * s, sy0 + (Math.random() - 0.5) * 0.9 * s);
-      ctx.stroke();
-    }
+    ctx.globalAlpha = 0.32 * fog;
+    ctx.fillStyle = '#000';
+    ctx.beginPath();
+    ctx.ellipse(shadowProj.sx, shadowProj.sy, 2.2 * shadowProj.scale * theme.scale, 0.55 * shadowProj.scale * theme.scale, 0, 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
-    if (hpFrac < 0.3) {
-      ctx.save();
-      ctx.globalAlpha = fog * 0.5 * (Math.sin(boss.shakeT * 20) * 0.5 + 0.5);
-      ctx.fillStyle = theme.eye;
-      ctx.shadowColor = theme.eye;
-      ctx.shadowBlur = 12;
-      ctx.beginPath(); ctx.ellipse(0, torsoTopY + bh * 0.4, bw * 0.15, bh * 0.12, 0, 0, Math.PI * 2); ctx.fill();
-      ctx.shadowBlur = 0;
-      ctx.restore();
-    }
   }
 
-  // head, Corinthian-style helmet with crest
-  const headR = bw * 0.17;
-  const headY = torsoTopY - headR * 0.5;
-  ctx.fillStyle = theme.body;
-  ctx.beginPath(); ctx.arc(0, headY, headR, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = theme.crest;
-  ctx.beginPath(); ctx.ellipse(0, headY - headR * 1.0, headR * 1.3, headR * 0.5, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = theme.bodyDark;
-  ctx.fillRect(-headR * 0.1, headY - headR * 0.1, headR * 0.2, headR * 0.9);
-  // glowing eyes
-  ctx.fillStyle = theme.eye;
-  ctx.shadowColor = theme.eye;
-  ctx.shadowBlur = 14;
-  ctx.beginPath(); ctx.ellipse(-headR * 0.34, headY, headR * 0.16, headR * 0.1, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.beginPath(); ctx.ellipse(headR * 0.34, headY, headR * 0.16, headR * 0.1, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.shadowBlur = 0;
-
+  ctx.save();
+  ctx.globalAlpha = fog;
+  drawActor3D(actor, rig.parts);
   ctx.restore();
+
+  // glowing eyes + damage cracks/ichor glow, as a 2D overlay on the head/torso
+  const eyeProj = project(actor.x, rig.headCenterY, actor.z + 0.34 * theme.scale * 0.7);
+  if (eyeProj.ok) {
+    const es = eyeProj.scale * theme.scale;
+    ctx.save();
+    ctx.globalAlpha = fog;
+    ctx.fillStyle = theme.eye;
+    ctx.shadowColor = theme.eye;
+    ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.ellipse(eyeProj.sx - 0.13 * es, eyeProj.sy, 0.055 * es, 0.04 * es, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(eyeProj.sx + 0.13 * es, eyeProj.sy, 0.055 * es, 0.04 * es, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  if (hpFrac < 0.6) {
+    const chestProj = project(actor.x, rig.torsoCenterY, actor.z + rig.torsoHalf[2]);
+    if (chestProj.ok) {
+      const cs = chestProj.scale * theme.scale;
+      ctx.save();
+      ctx.globalAlpha = fog * (1 - hpFrac) * 0.9;
+      ctx.strokeStyle = '#2a1800';
+      ctx.lineWidth = Math.max(1, 0.045 * cs);
+      for (let i = 0; i < 5; i++) {
+        ctx.beginPath();
+        const sx0 = chestProj.sx + (Math.random() - 0.5) * 1.6 * cs;
+        const sy0 = chestProj.sy + (Math.random() - 0.5) * 1.2 * cs;
+        ctx.moveTo(sx0, sy0);
+        ctx.lineTo(sx0 + (Math.random() - 0.5) * 0.7 * cs, sy0 + (Math.random() - 0.5) * 0.7 * cs);
+        ctx.stroke();
+      }
+      ctx.restore();
+      if (hpFrac < 0.3) {
+        ctx.save();
+        ctx.globalAlpha = fog * 0.55 * (Math.sin(boss.shakeT * 20) * 0.5 + 0.5);
+        ctx.fillStyle = theme.eye;
+        ctx.shadowColor = theme.eye;
+        ctx.shadowBlur = 16;
+        ctx.beginPath(); ctx.ellipse(chestProj.sx, chestProj.sy, 0.32 * cs, 0.26 * cs, 0, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+    }
+  }
 }
 
 function enterBossFight(checkpointIndex) {

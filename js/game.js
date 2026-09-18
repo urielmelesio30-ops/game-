@@ -386,6 +386,20 @@ function buildWorld() {
     bi++;
   }
 
+  // Olive trees and urns dotted just beyond the colonnade for garden life.
+  let tz = 24;
+  let ti = 0;
+  while (tz > LEVEL_END_Z - 20) {
+    const side = ti % 2 === 0 ? 1 : -1;
+    if (ti % 2 === 0) {
+      scenery.push({ type: 'tree', x: side * 9.4, z: tz, seed: ti * 3.1 });
+    } else {
+      scenery.push({ type: 'urn', x: side * 9.0, z: tz });
+    }
+    tz -= 34 + (ti % 3) * 8;
+    ti++;
+  }
+
   // A temple gateway just ahead of the start, plus one right at each boss
   // checkpoint for a dramatic arrival.
   const templeZs = [-32, ...bossCheckpoints.map(c => c.z - 8)];
@@ -606,12 +620,79 @@ function drawBanner(p) {
   ctx.restore();
 }
 
+const OLIVE_GREEN = '#7a8f4a', OLIVE_GREEN_DARK = '#5a6a34';
+function drawTree(p) {
+  const proj = project(p.x, 0, p.z);
+  if (!proj.ok || proj.depth < 0 || proj.depth > FAR_CLIP) return;
+  ctx.save();
+  ctx.globalAlpha = fogFactor(proj.depth);
+  const sway = Math.sin(runCycle * 0.4 + p.seed) * 0.04;
+  const parts = [
+    { center: [p.x, 1.1, p.z], half: [0.16, 1.1, 0.16], color: '#7a6a4a', rot: { axis: 'z', angle: sway, pivot: [p.x, 0, p.z] } },
+    { kind: 'disc', center: [p.x - 0.5, 2.3, p.z], normalAxis: [0.3, 0.2, 0.9], radius: 0.85, segments: 8, color: OLIVE_GREEN },
+    { kind: 'disc', center: [p.x + 0.4, 2.6, p.z + 0.1], normalAxis: [-0.2, 0.3, 0.9], radius: 0.95, segments: 8, color: OLIVE_GREEN_DARK },
+    { kind: 'disc', center: [p.x, 3.1, p.z - 0.1], normalAxis: [0.1, 0.4, 0.85], radius: 0.75, segments: 8, color: OLIVE_GREEN },
+  ];
+  drawActor3D({ x: 0, y: 0, z: 0 }, parts);
+  ctx.restore();
+}
+
+function drawUrn(p) {
+  const proj = project(p.x, 0, p.z);
+  if (!proj.ok || proj.depth < 0 || proj.depth > FAR_CLIP) return;
+  ctx.save();
+  ctx.globalAlpha = fogFactor(proj.depth);
+  const parts = [
+    { center: [p.x, 0.22, p.z], half: [0.16, 0.22, 0.16], color: COL.cliffB },
+    { center: [p.x, 0.62, p.z], half: [0.32, 0.28, 0.32], color: COL.gold },
+    { center: [p.x, 1.0, p.z], half: [0.18, 0.14, 0.18], color: COL.goldDark },
+  ];
+  drawActor3D({ x: 0, y: 0, z: 0 }, parts);
+  ctx.restore();
+}
+
 function drawSceneryPiece(p) {
   if (p.type === 'column') drawColumn(p);
   else if (p.type === 'temple') drawTemple(p);
   else if (p.type === 'statue') drawStatue(p);
   else if (p.type === 'brazier') drawBrazier(p);
   else if (p.type === 'banner') drawBanner(p);
+  else if (p.type === 'tree') drawTree(p);
+  else if (p.type === 'urn') drawUrn(p);
+}
+
+let atmosphereT = 0;
+
+function drawMountainLayer(baseY, amp, color, alpha, parallax, seedOffset) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(0, HORIZON_Y);
+  const scroll = camera.x * parallax;
+  const peaks = 7;
+  for (let i = 0; i <= peaks; i++) {
+    const x = (i / peaks) * (W + 120) - 60 - (scroll % (W / peaks));
+    const n = Math.sin(i * 12.9 + seedOffset) * 0.5 + Math.sin(i * 5.3 + seedOffset * 1.7) * 0.5;
+    const y = baseY - Math.abs(n) * amp;
+    ctx.lineTo(x, y);
+  }
+  ctx.lineTo(W + 60, HORIZON_Y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawCloud(cx, cy, s, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#fffaf0';
+  [[-0.5, 0, 0.5], [0, -0.18, 0.62], [0.55, 0.02, 0.45], [-1.0, 0.08, 0.4], [1.05, 0.1, 0.36]].forEach(([dx, dy, r]) => {
+    ctx.beginPath();
+    ctx.ellipse(cx + dx * s, cy + dy * s, r * s, r * s * 0.62, 0, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
 }
 
 function drawBackground() {
@@ -623,15 +704,34 @@ function drawBackground() {
   ctx.fillStyle = skyGrad;
   ctx.fillRect(0, 0, W, HORIZON_Y);
 
-  // sun glow
   const sunX = CENTER_X + Math.sin(camera.x * 0.02) * 20;
-  const sunY = HORIZON_Y * 0.55;
+  const sunY = HORIZON_Y * 0.5;
+
+  // drifting clouds, behind the mountains and sun
+  for (let i = 0; i < 4; i++) {
+    const speed = 3.2 + i * 1.1;
+    const cx = ((atmosphereT * speed + i * 210 - camera.x * 0.15) % (W + 260)) - 130;
+    const cy = HORIZON_Y * (0.16 + (i % 3) * 0.13);
+    drawCloud(cx, cy, 34 + (i % 3) * 10, 0.5 - i * 0.06);
+  }
+
+  // hazy distant mountains, two parallax layers
+  drawMountainLayer(HORIZON_Y, HORIZON_Y * 0.22, '#a9c3dd', 0.55, 0.01, 4.1);
+  drawMountainLayer(HORIZON_Y, HORIZON_Y * 0.14, '#8fb3d6', 0.7, 0.025, 11.7);
+
+  // sun disc + glow
   const glow = ctx.createRadialGradient(sunX, sunY, 4, sunX, sunY, H * 0.5);
   glow.addColorStop(0, 'rgba(255,244,210,0.95)');
   glow.addColorStop(0.35, 'rgba(255,214,140,0.35)');
   glow.addColorStop(1, 'rgba(255,214,140,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, HORIZON_Y * 1.4);
+  ctx.save();
+  ctx.fillStyle = '#fff9e8';
+  ctx.shadowColor = '#fff3c4';
+  ctx.shadowBlur = 30;
+  ctx.beginPath(); ctx.arc(sunX, sunY, Math.max(10, H * 0.032), 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
 
   // god rays (soft streaks)
   ctx.save();
@@ -656,6 +756,67 @@ function drawBackground() {
   groundGrad.addColorStop(1, COL.sand1);
   ctx.fillStyle = groundGrad;
   ctx.fillRect(0, HORIZON_Y, W, H - HORIZON_Y);
+}
+
+function drawVignette() {
+  const r = Math.max(W, H) * 0.75;
+  const vg = ctx.createRadialGradient(CENTER_X, H * 0.52, r * 0.45, CENTER_X, H * 0.52, r);
+  vg.addColorStop(0, 'rgba(0,0,0,0)');
+  vg.addColorStop(1, 'rgba(10,6,2,0.38)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, W, H);
+}
+
+// Slow-drifting dust motes catching the light, for atmosphere.
+const dustMotes = [];
+function initDustMotes() {
+  dustMotes.length = 0;
+  for (let i = 0; i < 22; i++) {
+    dustMotes.push({
+      x: (Math.random() - 0.5) * 14, y: 0.5 + Math.random() * 3.5, z: 0,
+      speed: 0.15 + Math.random() * 0.25, drift: (Math.random() - 0.5) * 0.3, phase: Math.random() * 10,
+    });
+  }
+}
+initDustMotes();
+function drawDustMotes() {
+  ctx.save();
+  for (const m of dustMotes) {
+    const z = camera.z - 4 - ((atmosphereT * m.speed * 6 + m.phase * 3) % 30);
+    const x = m.x + Math.sin(atmosphereT * 0.4 + m.phase) * m.drift * 3;
+    const proj = project(x, m.y, z);
+    if (!proj.ok || proj.depth > 34) continue;
+    const flicker = 0.35 + 0.35 * Math.sin(atmosphereT * 2 + m.phase * 5);
+    ctx.globalAlpha = Math.max(0, flicker) * fogFactor(proj.depth) * 0.5;
+    ctx.fillStyle = '#fff3c4';
+    ctx.beginPath();
+    ctx.arc(proj.sx, proj.sy, Math.max(0.6, proj.scale * 0.012), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Alternating perspective-correct floor bands between the colonnades — a
+// real mosaic tile pattern instead of a flat gradient.
+function drawMosaicFloor() {
+  const spacing = 3.2;
+  const startZ = Math.ceil((camera.z - 1.2) / spacing) * spacing;
+  for (let i = 0; i < 16; i++) {
+    const zNear = startZ - i * spacing;
+    const zFar = zNear - spacing;
+    const depth = camera.z - (zNear + zFar) / 2;
+    if (depth < 0.6 || depth > 70) continue;
+    const nl = project(-3.9, 0.01, zNear), nr = project(3.9, 0.01, zNear);
+    const fl = project(-3.9, 0.01, zFar), fr = project(3.9, 0.01, zFar);
+    if (!nl.ok || !nr.ok || !fl.ok || !fr.ok) continue;
+    const tileIdx = Math.round(zNear / spacing);
+    ctx.globalAlpha = fogFactor(depth) * 0.3;
+    ctx.fillStyle = tileIdx % 2 === 0 ? 'rgba(196,138,62,0.5)' : 'rgba(230,190,120,0.35)';
+    ctx.beginPath();
+    ctx.moveTo(nl.sx, nl.sy); ctx.lineTo(nr.sx, nr.sy); ctx.lineTo(fr.sx, fr.sy); ctx.lineTo(fl.sx, fl.sy);
+    ctx.closePath(); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawLaneLines() {
@@ -801,6 +962,27 @@ function formationOffsets(n) {
 
 let runCycle = 0;
 
+// ---------- Screen juice: shake + hit flash ----------
+let screenShakeMag = 0;
+let flashAlpha = 0, flashColor = '#fff';
+function triggerShake(mag) { screenShakeMag = Math.max(screenShakeMag, mag); }
+function triggerFlash(color, alpha) { flashColor = color; flashAlpha = Math.max(flashAlpha, alpha); }
+
+let dustTimer = 0;
+function updateRunDust(dt) {
+  dustTimer -= dt;
+  if ((state.mode === 'run') && dustTimer <= 0 && player.count > 0) {
+    dustTimer = 0.09;
+    for (let k = 0; k < 2; k++) {
+      particles.push({
+        x: player.x + (Math.random() - 0.5) * 1.6, y: 0.05, z: player.z + 0.5 + Math.random() * 0.3,
+        vx: (Math.random() - 0.5) * 1.2, vy: 0.4 + Math.random() * 0.5, vz: 1.2 + Math.random() * 0.8,
+        life: 0.35 + Math.random() * 0.15, kind: 'dust', rot: 0, spin: 0,
+      });
+    }
+  }
+}
+
 function drawPlayerSquad() {
   const n = Math.min(player.count, MAX_DISPLAY);
   const offsets = formationOffsets(n);
@@ -903,10 +1085,11 @@ function spawnExplosion(x, z, color) {
 function updateParticles(dt) {
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
-    p.vy -= 16 * dt;
+    if (p.kind !== 'dust') p.vy -= 16 * dt;
+    else p.vy -= 1.2 * dt;
     p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
     p.rot += p.spin * dt;
-    if (p.y < 0.15) { p.y = 0.15; p.vy *= -0.4; p.vx *= 0.7; p.vz *= 0.7; }
+    if (p.kind !== 'dust' && p.y < 0.15) { p.y = 0.15; p.vy *= -0.4; p.vx *= 0.7; p.vz *= 0.7; }
     p.life -= dt;
     if (p.life <= 0) particles.splice(i, 1);
   }
@@ -918,7 +1101,13 @@ function drawParticles() {
     if (!proj.ok || proj.depth > FAR_CLIP) continue;
     ctx.globalAlpha = fogFactor(proj.depth) * Math.min(1, p.life);
     if (p.kind === 'coin') drawCoinSprite(proj.sx, proj.sy, proj.scale * 0.7, p.rot);
-    else drawDebrisSprite(proj.sx, proj.sy, proj.scale, p.rot, p.color || '#ff6633');
+    else if (p.kind === 'dust') {
+      ctx.globalAlpha *= 0.4;
+      ctx.fillStyle = COL.sand2;
+      ctx.beginPath();
+      ctx.arc(proj.sx, proj.sy, proj.scale * 0.1 * (1.4 - p.life), 0, Math.PI * 2);
+      ctx.fill();
+    } else drawDebrisSprite(proj.sx, proj.sy, proj.scale, p.rot, p.color || '#ff6633');
     ctx.globalAlpha = 1;
   }
 }
@@ -1224,6 +1413,8 @@ function updateBoss(dt) {
     spawnExplosion(boss.x, boss.z, '#ff7a3c');
     spawnCoinBurst(boss.x, boss.z, 50 + bossCheckpointIndex * 20);
     AudioFX.explosion();
+    triggerShake(0.7);
+    triggerFlash('#ffe066', 0.5);
     els.bossHudWrap.classList.add('hidden');
     boss = null;
     const wasFinal = bossCheckpointIndex >= bossCheckpoints.length - 1;
@@ -1468,8 +1659,12 @@ function handleObstacles() {
           spawnExplosion(LANES[o.laneIdx], o.z, '#ff5533');
           AudioFX.hitEnemy();
           toast(`-${losses} 💥`);
+          triggerShake(0.12 + Math.min(0.25, o.count / 200));
+          triggerFlash('#fff3c4', 0.18);
         } else {
           spawnExplosion(player.x, player.z, '#3ad1ff');
+          triggerShake(0.45);
+          triggerFlash('#ff3b3b', 0.4);
           gameOver();
           return;
         }
@@ -1516,14 +1711,24 @@ function animate(now) {
 
   player.x += (player.targetX - player.x) * LANE_LERP;
   runCycle += dt * (state.mode === 'gameover' ? 0 : 10);
+  atmosphereT += dt;
 
   updateLasers(dt);
   updateParticles(dt);
+  updateRunDust(dt);
   updateCamera();
+  screenShakeMag *= 0.88;
+  flashAlpha = Math.max(0, flashAlpha - dt * 2.2);
 
   // ---- render ----
   ctx.clearRect(0, 0, W, H);
+  const shakeX = screenShakeMag > 0.002 ? (Math.random() - 0.5) * screenShakeMag * W * 0.06 : 0;
+  const shakeY = screenShakeMag > 0.002 ? (Math.random() - 0.5) * screenShakeMag * H * 0.04 : 0;
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
   drawBackground();
+  drawMosaicFloor();
   drawLaneLines();
 
   // static scenery: draw far-to-near (scenery sorted ascending by z already; z more negative = farther)
@@ -1534,10 +1739,20 @@ function animate(now) {
   drawPlayerSquad();
   drawParticles();
   drawLasers();
+  drawDustMotes();
+
+  ctx.restore();
+
+  drawVignette();
+  if (flashAlpha > 0.005) {
+    ctx.save();
+    ctx.globalAlpha = flashAlpha;
+    ctx.fillStyle = flashColor;
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
 
   updateHud();
-
-  requestAnimationFrame; // no-op reference kept for clarity
 }
 
 resize();

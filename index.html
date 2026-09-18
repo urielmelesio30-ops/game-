@@ -25,11 +25,13 @@
 
   <div id="screen-start" class="screen">
     <h1>FALANGE<br/><span>DORADA</span></h1>
-    <p class="tagline">Multiplica tu falange. Aplasta al enemigo. Vence al Coloso de Bronce.</p>
+    <p class="tagline">Multiplica tu falange. Aplasta al enemigo. Vence a los Colosos.</p>
+    <div class="pill" id="bankPill">🏦 <span id="bankAmount">0</span> dracmas</div>
     <button id="btnStart" class="btn">TOCA PARA JUGAR</button>
+    <button id="btnArmory" class="btn armory-btn">🛡️ ARMERÍA</button>
     <div class="howto">
       <span>⬅️ ➡️ / A D / Desliza</span> para cambiar de carril<br/>
-      Atraviesa los portales <b class="accent">x2</b> para crecer · Evita legiones enemigas más grandes que la tuya
+      Atraviesa los portales <b class="accent">x2</b> para crecer · Evita legiones enemigas más grandes que la tuya · 3 Colosos te esperan
     </div>
   </div>
 
@@ -43,6 +45,20 @@
     <h1 class="gold">¡VICTORIA!</h1>
     <p id="vicStats" class="tagline"></p>
     <button id="btnAgain" class="btn gold-btn">JUGAR DE NUEVO</button>
+  </div>
+
+  <div id="screen-armory" class="screen hidden">
+    <h1><span>ARMERÍA</span></h1>
+    <div class="pill" id="bankPill2">🏦 <span id="bankAmount2">0</span> dracmas</div>
+    <div class="shopSection">
+      <div class="shopHeading">Armas</div>
+      <div id="weaponList" class="shopList"></div>
+    </div>
+    <div class="shopSection">
+      <div class="shopHeading">Armaduras</div>
+      <div id="armorList" class="shopList"></div>
+    </div>
+    <button id="btnArmoryBack" class="btn">VOLVER</button>
   </div>
 </div>
 

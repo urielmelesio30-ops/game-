@@ -209,3 +209,83 @@ canvas#game {
   opacity: 0.85;
 }
 .howto .accent { color: #e8b93a; }
+
+.armory-btn {
+  background: linear-gradient(180deg, rgba(40,36,26,0.9), rgba(20,18,14,0.9));
+  color: #ffe08a;
+  border: 1px solid rgba(230,190,90,0.5);
+  box-shadow: none;
+  padding: 12px 30px;
+  font-size: 15px;
+}
+.armory-btn:active { transform: translateY(2px); }
+
+#screen-armory {
+  justify-content: flex-start;
+  overflow-y: auto;
+  padding-top: max(40px, env(safe-area-inset-top));
+  padding-bottom: 30px;
+  gap: 10px;
+}
+
+.shopSection {
+  width: 100%;
+  max-width: 320px;
+}
+
+.shopHeading {
+  color: #e8b93a;
+  font-weight: 800;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-align: left;
+  margin-bottom: 6px;
+  opacity: 0.9;
+}
+
+.shopList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shopRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(230,190,90,0.25);
+  border-radius: 14px;
+  padding: 10px 14px;
+}
+
+.shopInfo { text-align: left; }
+.shopName { color: #f3ead0; font-weight: 700; font-size: 14px; }
+.shopStat { color: #d8cdb0; font-size: 12px; opacity: 0.8; }
+
+.shopStatus {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #9fd8a0;
+  white-space: nowrap;
+}
+.shopStatus.locked { color: #8a8478; }
+
+.shopBuy {
+  pointer-events: all;
+  background: linear-gradient(180deg, #e8c060, #b8823c);
+  border: none;
+  color: #3a2400;
+  font-weight: 800;
+  font-size: 13px;
+  padding: 8px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.shopBuy:disabled {
+  background: rgba(120,110,90,0.3);
+  color: rgba(255,255,255,0.4);
+  cursor: not-allowed;
+}

@@ -11,7 +11,7 @@
 const LANES = [-2.2, 0, 2.2];
 const FORWARD_SPEED = 11;
 const LANE_LERP = 0.18;
-const BOSS_Z = -520;
+const LEVEL_END_Z = -600;
 const WORLD_START_Z = 30;
 const MAX_DISPLAY = 130; // sprite cap for perf; real squad count is uncapped in math
 const FAR_CLIP = 340; // max render distance
@@ -75,6 +75,78 @@ const COL = {
   laurel: '#5a8a4a',
 };
 
+// ---------- Progression: weapons, armor, enemy types, boss themes ----------
+// Weapon tier: raises effective offense (player.count * power) in combat
+// math, and recolors the ranged bolts.
+const WEAPON_TIERS = [
+  { name: 'Espada de Bronce', power: 1.0, cost: 0, laser: '#ffe066' },
+  { name: 'Lanza de Hierro', power: 1.3, cost: 25, laser: '#cfeaff' },
+  { name: 'Jabalina de Fuego', power: 1.7, cost: 60, laser: '#ff9a52' },
+  { name: 'Rayo de Zeus', power: 2.3, cost: 120, laser: '#e0b3ff' },
+];
+// Armor tier: mitigates enemy effective threat and reduces casualties on a
+// win, and recolors the hero cuirass.
+const ARMOR_TIERS = [
+  { name: 'Coraza de Bronce', defense: 0.0, cost: 0, body: '#e0a83f', bodyDark: '#9c6c1f' },
+  { name: 'Coraza de Hierro', defense: 0.15, cost: 25, body: '#a9b2ba', bodyDark: '#5b636a' },
+  { name: 'Coraza de Plata', defense: 0.30, cost: 60, body: '#dfe6ea', bodyDark: '#8b939a' },
+  { name: 'Armadura de Aegis', defense: 0.45, cost: 120, body: '#fff3c4', bodyDark: '#e0b84a' },
+];
+
+// Enemy variety: a power multiplier (effective threat) plus a visual profile.
+const ENEMY_TYPES = {
+  debil: { power: 0.7, sizeMult: 0.85, body: '#b0524a', bodyDark: '#6e2f28', crest: '#8a8a8a', label: 'Explorador' },
+  raso: { power: 1.0, sizeMult: 1.0, body: '#7a2b2b', bodyDark: '#431616', crest: '#1c1c1c', label: 'Soldado' },
+  elite: { power: 1.4, sizeMult: 1.18, body: '#3a1414', bodyDark: '#1a0808', crest: '#ff8a2a', label: 'Élite' },
+};
+
+// Boss themes: each mini/final boss reuses the same Talos-style rig but with
+// a visibly different palette, weapon, size and name so no two encounters
+// look identical.
+const BOSS_THEMES = [
+  {
+    name: 'ARGOS, CENTINELA DE BRONCE', weapon: 'sword', scale: 1.0, maxHp: 260,
+    body: '#b8823c', bodyDark: '#6b4a1f', crest: '#8b2e1f', eye: '#ff8a2a', shield: '#b8823c', shieldDark: '#6b4a1f', metal: '#dfe6ea',
+  },
+  {
+    name: 'CRONOS MENOR, EL ACORAZADO', weapon: 'axe', scale: 1.15, maxHp: 360,
+    body: '#8e97a0', bodyDark: '#454b52', crest: '#1c1c1c', eye: '#4ad1ff', shield: '#8e97a0', shieldDark: '#454b52', metal: '#e9edf0',
+  },
+  {
+    name: 'TALOS, EL COLOSO DE BRONCE', weapon: 'hammer', scale: 1.35, maxHp: 480,
+    body: '#c9973f', bodyDark: '#7a5620', crest: '#f6f1e2', eye: '#ff8a2a', shield: '#c9973f', shieldDark: '#7a5620', metal: '#fff3c4',
+  },
+];
+
+// ---------- Save data: persistent bank + equipped gear across runs ----------
+const SAVE_KEY = 'falangeDorada_save_v1';
+function loadSave() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        bank: parsed.bank | 0,
+        weaponTier: Math.max(0, Math.min(WEAPON_TIERS.length - 1, parsed.weaponTier | 0)),
+        armorTier: Math.max(0, Math.min(ARMOR_TIERS.length - 1, parsed.armorTier | 0)),
+      };
+    }
+  } catch (e) { /* localStorage unavailable, fall back to defaults */ }
+  return { bank: 0, weaponTier: 0, armorTier: 0 };
+}
+function persistSave() {
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
+}
+const save = loadSave();
+
+// Boss checkpoints along the run — one every ~200 units, the last one at
+// the level's end. Each uses a different BOSS_THEMES entry.
+const bossCheckpoints = [
+  { z: -200, theme: BOSS_THEMES[0] },
+  { z: -400, theme: BOSS_THEMES[1] },
+  { z: LEVEL_END_Z, theme: BOSS_THEMES[2] },
+];
+
 // ---------- World scenery (static): a marble colonnade flanking the path,
 // with temple-facade gateways (columns + architrave + pediment) spanning it
 // at intervals.
@@ -84,16 +156,18 @@ function buildWorld() {
   const colXs = [-8.0, 8.0];
   colXs.forEach((baseX) => {
     let z = 32;
-    while (z > BOSS_Z - 40) {
+    while (z > LEVEL_END_Z - 40) {
       const height = 8.5 + Math.random() * 2.2;
       scenery.push({ type: 'column', x: baseX, z, height });
       z -= 4.2 + Math.random() * 1.3;
     }
   });
 
-  const templeZs = [-32, -145, -262, -382, BOSS_Z - 8];
+  // A temple gateway just ahead of the start, plus one right at each boss
+  // checkpoint for a dramatic arrival.
+  const templeZs = [-32, ...bossCheckpoints.map(c => c.z - 8)];
   templeZs.forEach((z, i) => {
-    const s = i === templeZs.length - 1 ? 1.7 : 1;
+    const s = i === templeZs.length - 1 ? 1.7 : 1 + i * 0.12;
     scenery.push({ type: 'temple', z, scale: s });
   });
 
@@ -276,8 +350,8 @@ function drawLaneLines() {
 // world unit, from project()) to get pixel dimensions — never raw pixels.
 const SOLDIER_W = 0.52, SOLDIER_H = 0.95, SOLDIER_HEAD_R = 0.22, SOLDIER_BOB = 0.07;
 
-function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popScale, bobT, crestColor) {
-  const s = scale * (popScale === undefined ? 1 : popScale);
+function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popScale, bobT, crestColor, sizeMult) {
+  const s = scale * (popScale === undefined ? 1 : popScale) * (sizeMult || 1);
   if (s < 1) return;
   const bodyW = SOLDIER_W * s, bodyH = SOLDIER_H * s;
   const bob = Math.sin(bobT) * SOLDIER_BOB * s;
@@ -299,6 +373,12 @@ function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popSca
   ctx.strokeStyle = crestColor || '#c0392b';
   ctx.lineWidth = Math.max(1, bodyW * 0.05);
   ctx.stroke();
+  // shield glint (rim-light, suggests curvature)
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = Math.max(1, bodyW * 0.04);
+  ctx.beginPath();
+  ctx.arc(-bodyW * 0.46, bodyH * 0.05, bodyW * 0.24, Math.PI * 1.1, Math.PI * 1.5);
+  ctx.stroke();
   // tunic flare (pteruges skirt)
   ctx.fillStyle = colorBodyDark;
   ctx.beginPath();
@@ -308,7 +388,8 @@ function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popSca
   ctx.lineTo(-bodyW * 0.5, bodyH * 0.6);
   ctx.closePath();
   ctx.fill();
-  // body (bronze cuirass)
+  // body (cuirass) — gradient + a soft vertical highlight for a rounded,
+  // less flat-shaded look
   const grad = ctx.createLinearGradient(-bodyW / 2, 0, bodyW / 2, 0);
   grad.addColorStop(0, colorBodyDark);
   grad.addColorStop(0.5, colorBody);
@@ -316,6 +397,14 @@ function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popSca
   ctx.fillStyle = grad;
   roundRect(-bodyW / 2, -bodyH * 0.15, bodyW, bodyH * 0.55, bodyW * 0.28);
   ctx.fill();
+  ctx.save();
+  ctx.clip();
+  const sheen = ctx.createLinearGradient(-bodyW * 0.1, -bodyH * 0.15, bodyW * 0.28, -bodyH * 0.15);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.32)');
+  sheen.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(-bodyW * 0.1, -bodyH * 0.15, bodyW * 0.38, bodyH * 0.55);
+  ctx.restore();
   // belt
   ctx.fillStyle = colorBodyDark;
   ctx.fillRect(-bodyW / 2, bodyH * 0.26, bodyW, bodyH * 0.06);
@@ -325,6 +414,11 @@ function drawSoldier(sx, sy, scale, colorBody, colorBodyDark, colorVisor, popSca
   ctx.beginPath();
   ctx.arc(0, headY, headR, 0, Math.PI * 2);
   ctx.fillStyle = colorBody;
+  ctx.fill();
+  // helmet gloss highlight
+  ctx.fillStyle = 'rgba(255,255,255,0.4)';
+  ctx.beginPath();
+  ctx.ellipse(-headR * 0.32, headY - headR * 0.28, headR * 0.28, headR * 0.16, -0.5, 0, Math.PI * 2);
   ctx.fill();
   // crest (horsehair plume)
   ctx.fillStyle = crestColor || '#c0392b';
@@ -414,6 +508,7 @@ function drawPlayerSquad() {
   const offsets = formationOffsets(n);
   while (player.displayScale.length < n) player.displayScale.push(0);
   player.displayScale.length = n;
+  const armor = ARMOR_TIERS[save.armorTier];
 
   const items = [];
   for (let i = 0; i < n; i++) {
@@ -431,7 +526,7 @@ function drawPlayerSquad() {
     const pop = player.displayScale[it.idx];
     const fog = fogFactor(proj.depth);
     ctx.globalAlpha = fog;
-    drawSoldier(proj.sx, proj.sy, proj.scale, COL.blueBody, COL.blueBodyDark, COL.blueVisor, pop, it.bobT, COL.heroCrest);
+    drawSoldier(proj.sx, proj.sy, proj.scale, armor.body, armor.bodyDark, COL.blueVisor, pop, it.bobT, COL.heroCrest);
     ctx.globalAlpha = 1;
   }
 }
@@ -467,14 +562,15 @@ function updateLasers(dt) {
   }
 }
 function drawLasers() {
+  const laserColor = WEAPON_TIERS[save.weaponTier].laser;
   for (const l of activeLasers) {
     const a = project(l.x, 0.9, l.z1);
     const b = project(l.x, 0.9, l.z2);
     if (!a.ok || !b.ok) continue;
     ctx.save();
     ctx.globalAlpha = Math.max(0, l.life / 0.12);
-    ctx.strokeStyle = COL.laser;
-    ctx.shadowColor = COL.laser;
+    ctx.strokeStyle = laserColor;
+    ctx.shadowColor = laserColor;
     ctx.shadowBlur = 10;
     ctx.lineWidth = Math.max(1.5, 3 * a.scale / 60);
     ctx.beginPath();
@@ -533,19 +629,27 @@ const obstacles = [];
 
 function spawnLevel() {
   const defs = [
+    // Act 1: start -> boss checkpoint 1 (z -200)
     { type: 'gate', z: -40, op: 'x2' },
     { type: 'coins', z: -70, lanes: [0, 2] },
-    { type: 'enemy', z: -110, lanes: [1], count: 3 },
+    { type: 'enemy', z: -110, lanes: [1], count: 3, etype: 'raso' },
     { type: 'gate', z: -155, op: 'x3' },
-    { type: 'enemy', z: -200, lanes: [2], count: 5 },
-    { type: 'coins', z: -225, lanes: [0, 1] },
-    { type: 'gate', z: -250, op: '+5' },
-    { type: 'enemy', z: -295, lanes: [0, 1], count: 8 },
+    { type: 'enemy', z: -180, lanes: [2], count: 4, etype: 'debil' },
+
+    // Act 2: boss 1 -> boss checkpoint 2 (z -400)
+    { type: 'gate', z: -240, op: '+5' },
+    { type: 'enemy', z: -280, lanes: [0, 1], count: 10, etype: 'raso' },
+    { type: 'coins', z: -300, lanes: [0, 1, 2] },
     { type: 'gate', z: -330, op: 'x2' },
-    { type: 'coins', z: -350, lanes: [0, 1, 2] },
-    { type: 'enemy', z: -390, lanes: [0, 1, 2], count: 14 },
-    { type: 'gate', z: -430, op: '/2' },
-    { type: 'coins', z: -460, lanes: [0, 1, 2] },
+    { type: 'enemy', z: -365, lanes: [1], count: 14, etype: 'elite' },
+
+    // Act 3: boss 2 -> boss checkpoint 3 / level end (z -600)
+    { type: 'gate', z: -440, op: 'x3' },
+    { type: 'enemy', z: -470, lanes: [0, 1, 2], count: 20, etype: 'raso' },
+    { type: 'coins', z: -490, lanes: [0, 1, 2] },
+    { type: 'gate', z: -520, op: '/2' },
+    { type: 'enemy', z: -550, lanes: [0, 2], count: 16, etype: 'elite' },
+    { type: 'coins', z: -570, lanes: [0, 1, 2] },
   ];
 
   defs.forEach(def => {
@@ -553,7 +657,7 @@ function spawnLevel() {
       obstacles.push({ type: 'gate', z: def.z, op: def.op, used: false });
     } else if (def.type === 'enemy') {
       def.lanes.forEach(laneIdx => {
-        obstacles.push({ type: 'enemy', z: def.z, laneIdx, count: def.count, used: false, displayScale: [] });
+        obstacles.push({ type: 'enemy', z: def.z, laneIdx, count: def.count, etype: def.etype || 'raso', used: false, displayScale: [] });
       });
     } else if (def.type === 'coins') {
       def.lanes.forEach(laneIdx => {
@@ -620,11 +724,12 @@ function drawEnemyCluster(o) {
   while (o.displayScale.length < n) o.displayScale.push(1);
   const items = offsets.map((off, i) => ({ wx: LANES[o.laneIdx] + off.x, wz: o.z + off.z, idx: i }));
   items.sort((a, b) => a.wz - b.wz);
+  const etype = ENEMY_TYPES[o.etype] || ENEMY_TYPES.raso;
   for (const it of items) {
     const proj = project(it.wx, 0, it.wz);
     if (!proj.ok || proj.depth > FAR_CLIP || proj.depth < 0) continue;
     ctx.globalAlpha = fogFactor(proj.depth);
-    drawSoldier(proj.sx, proj.sy, proj.scale, COL.redBody, COL.redBodyDark, COL.redVisor, 1, runCycle * 8 + it.idx, COL.enemyCrest);
+    drawSoldier(proj.sx, proj.sy, proj.scale, etype.body, etype.bodyDark, COL.redVisor, 1, runCycle * 8 + it.idx, etype.crest, etype.sizeMult);
     ctx.globalAlpha = 1;
   }
 }
@@ -638,18 +743,59 @@ function drawCoinObstacle(o) {
   ctx.globalAlpha = 1;
 }
 
-// ---------- Boss: Talos, the bronze colossus of Greek myth ----------
+// ---------- Boss: giant warriors from Greek myth, one per checkpoint ----------
+// Each boss reuses the same humanoid rig but is driven by a BOSS_THEMES
+// entry (colors, weapon, size, HP, name) so every encounter is visibly its
+// own creature.
 const BOSS_W = 4.6, BOSS_H = 3.6;
 let boss = null;
-function buildBoss() {
-  return { x: 0, y: 0, z: BOSS_Z - 6, hp: 420, maxHp: 420, alive: true, shakeT: 0, spawnT: 0 };
+let bossCheckpointIndex = 0;
+let nextCheckpoint = 0; // index into bossCheckpoints of the next one to trigger
+
+function buildBoss(checkpoint) {
+  return {
+    x: 0, y: 0, z: checkpoint.z - 6, theme: checkpoint.theme,
+    hp: checkpoint.theme.maxHp, maxHp: checkpoint.theme.maxHp,
+    alive: true, shakeT: 0, spawnT: 0,
+  };
+}
+
+// Draws the "business end" of the boss's weapon at the tip of the raised
+// arm (already translated/rotated there by the caller).
+function drawWeaponHead(type, s, metalColor, darkColor) {
+  if (type === 'axe') {
+    ctx.fillStyle = metalColor;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0.75 * s, -0.5 * s); ctx.lineTo(0.55 * s, -1.3 * s); ctx.lineTo(0, -0.7 * s);
+    ctx.lineTo(-0.55 * s, -1.3 * s); ctx.lineTo(-0.75 * s, -0.5 * s);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = darkColor;
+    ctx.lineWidth = Math.max(1, 0.05 * s);
+    ctx.stroke();
+  } else if (type === 'hammer') {
+    ctx.fillStyle = metalColor;
+    roundRect(-0.5 * s, -1.5 * s, 1.0 * s, 1.0 * s, 0.18 * s);
+    ctx.fill();
+    ctx.strokeStyle = darkColor;
+    ctx.lineWidth = Math.max(1, 0.05 * s);
+    ctx.stroke();
+  } else { // sword
+    ctx.fillStyle = metalColor;
+    ctx.beginPath();
+    ctx.moveTo(-0.16 * s, 0); ctx.lineTo(0.16 * s, 0); ctx.lineTo(0.08 * s, -2.3 * s); ctx.lineTo(-0.08 * s, -2.3 * s);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = darkColor;
+    ctx.fillRect(-0.3 * s, -0.05 * s, 0.6 * s, 0.28 * s);
+  }
 }
 
 function drawBoss() {
   if (!boss) return;
+  const theme = boss.theme;
   const proj = project(boss.x, 0, boss.z);
   if (!proj.ok) return;
-  const s = proj.scale;
+  const s = proj.scale * theme.scale;
   const fog = fogFactor(proj.depth);
   ctx.save();
   ctx.globalAlpha = fog;
@@ -666,7 +812,7 @@ function drawBoss() {
 
   const legW = 0.85 * s, legH = 2.9 * s;
   const legStep = Math.sin(boss.shakeT * 2.2) * 0.12 * s;
-  ctx.fillStyle = COL.goldDark;
+  ctx.fillStyle = theme.bodyDark;
   ctx.fillRect(-1.15 * s - legW / 2, -legH + legStep, legW, legH);
   ctx.fillRect(1.15 * s - legW / 2, -legH - legStep, legW, legH);
 
@@ -674,20 +820,15 @@ function drawBoss() {
   const torsoBottomY = -legH;
   const torsoTopY = torsoBottomY - bh;
 
-  // sword arm, raised — drawn first so the torso overlaps the shoulder joint
+  // weapon arm, raised — drawn first so the torso overlaps the shoulder joint
   ctx.save();
   ctx.translate(bw * 0.56, torsoTopY + bh * 0.18);
   ctx.rotate(-0.65 + Math.sin(boss.shakeT * 6) * 0.06);
-  ctx.fillStyle = COL.goldDark;
+  ctx.fillStyle = theme.bodyDark;
   ctx.fillRect(-0.32 * s, 0, 0.64 * s, 2.3 * s);
   ctx.save();
   ctx.translate(0, 2.3 * s);
-  ctx.fillStyle = '#dfe6ea';
-  ctx.beginPath();
-  ctx.moveTo(-0.16 * s, 0); ctx.lineTo(0.16 * s, 0); ctx.lineTo(0.08 * s, -2.3 * s); ctx.lineTo(-0.08 * s, -2.3 * s);
-  ctx.closePath(); ctx.fill();
-  ctx.fillStyle = COL.goldDark;
-  ctx.fillRect(-0.3 * s, -0.05 * s, 0.6 * s, 0.28 * s);
+  drawWeaponHead(theme.weapon, s, theme.metal, theme.bodyDark);
   ctx.restore();
   ctx.restore();
 
@@ -695,28 +836,39 @@ function drawBoss() {
   ctx.save();
   ctx.translate(-bw * 0.58, torsoTopY + bh * 0.4);
   ctx.rotate(0.15);
-  ctx.fillStyle = COL.goldDark;
+  ctx.fillStyle = theme.bodyDark;
   ctx.fillRect(-0.3 * s, 0, 0.6 * s, 1.8 * s);
   ctx.beginPath();
   ctx.ellipse(0, 1.85 * s, 1.05 * s, 1.25 * s, 0, 0, Math.PI * 2);
-  ctx.fillStyle = COL.gold;
+  ctx.fillStyle = theme.shield;
   ctx.fill();
-  ctx.strokeStyle = COL.goldDark;
+  ctx.strokeStyle = theme.shieldDark;
   ctx.lineWidth = Math.max(1, 0.08 * s);
   ctx.stroke();
   ctx.restore();
 
   // torso
   const grad = ctx.createLinearGradient(-bw / 2, 0, bw / 2, 0);
-  grad.addColorStop(0, COL.goldDark); grad.addColorStop(0.5, COL.gold); grad.addColorStop(1, COL.goldDark);
+  grad.addColorStop(0, theme.bodyDark); grad.addColorStop(0.5, theme.body); grad.addColorStop(1, theme.bodyDark);
   ctx.fillStyle = grad;
   roundRect(-bw / 2, torsoTopY, bw, bh, bw * 0.14);
   ctx.fill();
   ctx.strokeStyle = 'rgba(0,0,0,0.25)';
   ctx.lineWidth = Math.max(1, 0.05 * s);
   ctx.stroke();
+  // torso sheen for a rounder, less flat look
+  ctx.save();
+  ctx.beginPath();
+  roundRect(-bw / 2, torsoTopY, bw, bh, bw * 0.14);
+  ctx.clip();
+  const sheen = ctx.createLinearGradient(-bw * 0.3, torsoTopY, bw * 0.05, torsoTopY);
+  sheen.addColorStop(0, 'rgba(255,255,255,0.22)');
+  sheen.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = sheen;
+  ctx.fillRect(-bw / 2, torsoTopY, bw * 0.5, bh);
+  ctx.restore();
 
-  // cracks near death, glowing molten-bronze ichor beneath
+  // cracks near death, glowing molten ichor beneath
   const hpFrac = boss.hp / boss.maxHp;
   if (hpFrac < 0.6) {
     ctx.save();
@@ -735,8 +887,8 @@ function drawBoss() {
     if (hpFrac < 0.3) {
       ctx.save();
       ctx.globalAlpha = fog * 0.5 * (Math.sin(boss.shakeT * 20) * 0.5 + 0.5);
-      ctx.fillStyle = COL.stinger;
-      ctx.shadowColor = COL.stinger;
+      ctx.fillStyle = theme.eye;
+      ctx.shadowColor = theme.eye;
       ctx.shadowBlur = 12;
       ctx.beginPath(); ctx.ellipse(0, torsoTopY + bh * 0.4, bw * 0.15, bh * 0.12, 0, 0, Math.PI * 2); ctx.fill();
       ctx.shadowBlur = 0;
@@ -747,15 +899,15 @@ function drawBoss() {
   // head, Corinthian-style helmet with crest
   const headR = bw * 0.17;
   const headY = torsoTopY - headR * 0.5;
-  ctx.fillStyle = COL.gold;
+  ctx.fillStyle = theme.body;
   ctx.beginPath(); ctx.arc(0, headY, headR, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#8b2e1f';
+  ctx.fillStyle = theme.crest;
   ctx.beginPath(); ctx.ellipse(0, headY - headR * 1.0, headR * 1.3, headR * 0.5, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = COL.goldDark;
+  ctx.fillStyle = theme.bodyDark;
   ctx.fillRect(-headR * 0.1, headY - headR * 0.1, headR * 0.2, headR * 0.9);
-  // glowing molten eyes
-  ctx.fillStyle = COL.stinger;
-  ctx.shadowColor = COL.stinger;
+  // glowing eyes
+  ctx.fillStyle = theme.eye;
+  ctx.shadowColor = theme.eye;
   ctx.shadowBlur = 14;
   ctx.beginPath(); ctx.ellipse(-headR * 0.34, headY, headR * 0.16, headR * 0.1, 0, 0, Math.PI * 2); ctx.fill();
   ctx.beginPath(); ctx.ellipse(headR * 0.34, headY, headR * 0.16, headR * 0.1, 0, 0, Math.PI * 2); ctx.fill();
@@ -764,18 +916,22 @@ function drawBoss() {
   ctx.restore();
 }
 
-function enterBossFight() {
+function enterBossFight(checkpointIndex) {
+  bossCheckpointIndex = checkpointIndex;
+  const checkpoint = bossCheckpoints[checkpointIndex];
   state.mode = 'boss';
-  boss = buildBoss();
+  boss = buildBoss(checkpoint);
   els.bossHudWrap.classList.remove('hidden');
-  toast('¡TALOS!');
+  els.bossLabel.textContent = checkpoint.theme.name;
+  toast(`¡${checkpoint.theme.name.split(',')[0]}!`);
 }
 
 function updateBoss(dt) {
   if (!boss || !boss.alive) return;
   boss.spawnT += dt;
   if (boss.spawnT < 0.4) return;
-  const dps = 14 + player.count * 4;
+  const weapon = WEAPON_TIERS[save.weaponTier];
+  const dps = (14 + player.count * 4) * weapon.power;
   boss.hp -= dps * dt;
   boss.shakeT += dt;
   els.bossHpBar.style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
@@ -784,11 +940,20 @@ function updateBoss(dt) {
     boss.alive = false;
     spawnExplosion(boss.x, boss.z, '#ffb347');
     spawnExplosion(boss.x, boss.z, '#ff7a3c');
-    spawnCoinBurst(boss.x, boss.z, 80);
+    spawnCoinBurst(boss.x, boss.z, 50 + bossCheckpointIndex * 20);
     AudioFX.explosion();
     els.bossHudWrap.classList.add('hidden');
     boss = null;
-    setTimeout(() => victory(), 1400);
+    const wasFinal = bossCheckpointIndex >= bossCheckpoints.length - 1;
+    setTimeout(() => {
+      if (wasFinal) {
+        victory();
+      } else {
+        nextCheckpoint = bossCheckpointIndex + 1;
+        state.mode = 'run';
+        toast('¡Continúa la falange!');
+      }
+    }, 1400);
   }
 }
 
@@ -802,12 +967,23 @@ const els = {
   toast: document.getElementById('toast'),
   bossHudWrap: document.getElementById('bossHudWrap'),
   bossHpBar: document.getElementById('bossHpBar'),
+  bossLabel: document.getElementById('bossLabel'),
   screenStart: document.getElementById('screen-start'),
   screenGameOver: document.getElementById('screen-gameover'),
   screenVictory: document.getElementById('screen-victory'),
+  screenArmory: document.getElementById('screen-armory'),
   goStats: document.getElementById('goStats'),
   vicStats: document.getElementById('vicStats'),
+  bankAmount: document.getElementById('bankAmount'),
+  bankAmount2: document.getElementById('bankAmount2'),
+  weaponList: document.getElementById('weaponList'),
+  armorList: document.getElementById('armorList'),
 };
+
+function updateBankDisplays() {
+  els.bankAmount.textContent = save.bank;
+  els.bankAmount2.textContent = save.bank;
+}
 
 function toast(msg) {
   els.toast.textContent = msg;
@@ -819,7 +995,7 @@ function toast(msg) {
 function updateHud() {
   els.squadCount.textContent = player.count;
   els.coinCount.textContent = state.coins;
-  const pct = Math.min(100, (Math.abs(player.z - WORLD_START_Z) / Math.abs(BOSS_Z - WORLD_START_Z)) * 100);
+  const pct = Math.min(100, (Math.abs(player.z - WORLD_START_Z) / Math.abs(LEVEL_END_Z - WORLD_START_Z)) * 100);
   els.progressBar.style.width = pct + '%';
 }
 
@@ -851,6 +1027,9 @@ function resetGame() {
   particles.length = 0;
   activeLasers.length = 0;
   boss = null;
+  nextCheckpoint = 0;
+  bossCheckpointIndex = 0;
+  els.bossHudWrap.classList.add('hidden');
 
   player.count = 3;
   player.x = 0; player.targetX = 0; player.laneIndex = 1;
@@ -868,21 +1047,29 @@ function resetGame() {
 }
 
 function showScreen(el) {
-  [els.screenStart, els.screenGameOver, els.screenVictory].forEach(s => s.classList.add('hidden'));
+  [els.screenStart, els.screenGameOver, els.screenVictory, els.screenArmory].forEach(s => s.classList.add('hidden'));
   if (el) el.classList.remove('hidden');
+}
+
+function bankCoins() {
+  save.bank += state.coins;
+  persistSave();
+  updateBankDisplays();
 }
 
 function gameOver() {
   state.mode = 'gameover';
   AudioFX.gameOver();
-  els.goStats.textContent = `Distancia recorrida: ${Math.round(Math.abs(player.z - WORLD_START_Z))}m · Dracmas: ${state.coins}`;
+  bankCoins();
+  els.goStats.textContent = `Distancia recorrida: ${Math.round(Math.abs(player.z - WORLD_START_Z))}m · Dracmas: ${state.coins} (banco: ${save.bank})`;
   showScreen(els.screenGameOver);
 }
 
 function victory() {
   state.mode = 'victory';
   AudioFX.victory();
-  els.vicStats.textContent = `Falange final: ${player.count} guerreros · Dracmas: ${state.coins}`;
+  bankCoins();
+  els.vicStats.textContent = `Falange final: ${player.count} guerreros · Dracmas: ${state.coins} (banco: ${save.bank})`;
   showScreen(els.screenVictory);
 }
 
@@ -893,6 +1080,66 @@ document.getElementById('btnStart').addEventListener('click', () => {
 });
 document.getElementById('btnRetry').addEventListener('click', () => { resetGame(); showScreen(null); });
 document.getElementById('btnAgain').addEventListener('click', () => { resetGame(); showScreen(null); });
+
+// ---------- Armory (upgrade shop) ----------
+function renderShopList(container, tiers, currentTierKey, onBuy) {
+  container.innerHTML = '';
+  const currentTier = save[currentTierKey];
+  tiers.forEach((tier, i) => {
+    const row = document.createElement('div');
+    row.className = 'shopRow';
+    const owned = i <= currentTier;
+    const isNext = i === currentTier + 1;
+    const statLabel = tier.power !== undefined ? `Poder x${tier.power.toFixed(2)}` : `Defensa ${Math.round(tier.defense * 100)}%`;
+    let actionHtml;
+    if (owned) {
+      actionHtml = i === currentTier ? '<span class="shopStatus equipped">EQUIPADO</span>' : '<span class="shopStatus">poseído</span>';
+    } else if (isNext) {
+      const affordable = save.bank >= tier.cost;
+      actionHtml = `<button class="shopBuy" data-idx="${i}" ${affordable ? '' : 'disabled'}>${tier.cost} 🪙</button>`;
+    } else {
+      actionHtml = '<span class="shopStatus locked">🔒</span>';
+    }
+    row.innerHTML = `<div class="shopInfo"><div class="shopName">${tier.name}</div><div class="shopStat">${statLabel}</div></div>${actionHtml}`;
+    container.appendChild(row);
+  });
+  container.querySelectorAll('.shopBuy').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.idx, 10);
+      onBuy(idx);
+    });
+  });
+}
+
+function renderArmory() {
+  updateBankDisplays();
+  renderShopList(els.weaponList, WEAPON_TIERS, 'weaponTier', (idx) => {
+    const tier = WEAPON_TIERS[idx];
+    if (save.bank < tier.cost || idx !== save.weaponTier + 1) return;
+    save.bank -= tier.cost;
+    save.weaponTier = idx;
+    persistSave();
+    AudioFX.coin();
+    renderArmory();
+  });
+  renderShopList(els.armorList, ARMOR_TIERS, 'armorTier', (idx) => {
+    const tier = ARMOR_TIERS[idx];
+    if (save.bank < tier.cost || idx !== save.armorTier + 1) return;
+    save.bank -= tier.cost;
+    save.armorTier = idx;
+    persistSave();
+    AudioFX.coin();
+    renderArmory();
+  });
+}
+
+document.getElementById('btnArmory').addEventListener('click', () => {
+  renderArmory();
+  showScreen(els.screenArmory);
+});
+document.getElementById('btnArmoryBack').addEventListener('click', () => {
+  showScreen(els.screenStart);
+});
 
 // ---------- Obstacle logic ----------
 function applyGateOp(op) {
@@ -927,12 +1174,18 @@ function handleObstacles() {
       const sameLaneish = Math.abs(player.x - LANES[o.laneIdx]) < 1.15;
       if (sameLaneish && dz > -1.2 && dz < 1.4) {
         o.used = true;
-        if (player.count > o.count) {
-          player.count -= o.count;
+        const weapon = WEAPON_TIERS[save.weaponTier];
+        const armor = ARMOR_TIERS[save.armorTier];
+        const etype = ENEMY_TYPES[o.etype] || ENEMY_TYPES.raso;
+        const effPlayer = player.count * weapon.power;
+        const effEnemy = o.count * etype.power * (1 - armor.defense);
+        if (effPlayer > effEnemy) {
+          const losses = Math.max(1, Math.round(o.count * (1 - armor.defense * 0.5)));
+          player.count = Math.max(1, player.count - losses);
           state.enemyDefeated += o.count;
           spawnExplosion(LANES[o.laneIdx], o.z, '#ff5533');
           AudioFX.hitEnemy();
-          toast(`-${o.count} 💥`);
+          toast(`-${losses} 💥`);
         } else {
           spawnExplosion(player.x, player.z, '#3ad1ff');
           gameOver();
@@ -969,9 +1222,10 @@ function animate(now) {
 
   if (state.mode === 'run') {
     player.z -= FORWARD_SPEED * dt;
-    if (player.z <= BOSS_Z + 14) {
-      player.z = BOSS_Z + 14;
-      enterBossFight();
+    const checkpoint = bossCheckpoints[nextCheckpoint];
+    if (checkpoint && player.z <= checkpoint.z + 14) {
+      player.z = checkpoint.z + 14;
+      enterBossFight(nextCheckpoint);
     }
     handleObstacles();
   } else if (state.mode === 'boss') {
@@ -1006,5 +1260,6 @@ function animate(now) {
 
 resize();
 updateHud();
+updateBankDisplays();
 requestAnimationFrame(animate);
 })();

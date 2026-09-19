@@ -995,7 +995,10 @@ function buildSoldierParts(S, variant, metal, metalDark, bobT) {
     const phase = i === 0 ? 0 : Math.PI;
     const swing = Math.sin(bobT + phase) * 0.8;
     const hip = [side * 0.14 * S, hipY, 0];
-    parts.push({ center: [hip[0], hipY - legHalf[1], hip[2]], half: legHalf, color: variant.skinDark, rot: { axis: 'x', angle: swing, pivot: hip } });
+    const legRot = { axis: 'x', angle: swing, pivot: hip };
+    parts.push({ center: [hip[0], hipY - legHalf[1], hip[2]], half: legHalf, color: variant.skinDark, rot: legRot });
+    // a sandal strap band at the ankle, riding with the leg's own swing
+    parts.push({ center: [hip[0], hipY - legHalf[1] * 1.9, hip[2]], half: [legHalf[0] * 1.05, 0.035 * S, legHalf[2] * 1.05], color: metalDark, rot: legRot });
   });
 
   const kiltHalf = [0.27 * S, 0.16 * S, 0.22 * S];
@@ -1025,12 +1028,12 @@ function buildSoldierParts(S, variant, metal, metalDark, bobT) {
     center: [0, headCenterY + headHalf[1] + 0.1 * S, 0.02 * S], half: [0.07 * S, 0.13 * S, 0.32 * S], color: variant.crest,
   });
 
-  // shield, slung on the back — mostly facing the camera since that's the
-  // visible side of a runner moving away into the level
-  const shieldCenter = [-0.05 * S, torsoCenterY + 0.05 * S, torsoHalf[2] + 0.1 * S];
-  const shieldNormal = [-0.25, 0.05, 0.95];
+  // shield, slung past the shoulder so it reads as its own round shape
+  // instead of hiding directly behind the torso/cape
+  const shieldCenter = [-0.46 * S, torsoCenterY + 0.02 * S, torsoHalf[2] * 0.5];
+  const shieldNormal = [-0.55, 0.05, 0.83];
   parts.push({
-    kind: 'disc', center: shieldCenter, normalAxis: shieldNormal, radius: 0.44 * S, segments: 10, color: metal,
+    kind: 'disc', center: shieldCenter, normalAxis: shieldNormal, radius: 0.4 * S, segments: 10, color: metal,
   });
 
   // a spear slung across the back, its head rising past the shoulder

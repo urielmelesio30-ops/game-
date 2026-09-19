@@ -50,13 +50,33 @@
   <div id="screen-armory" class="screen hidden">
     <h1><span>ARMERÍA</span></h1>
     <div class="pill" id="bankPill2">🏦 <span id="bankAmount2">0</span> dracmas</div>
-    <div class="shopSection">
-      <div class="shopHeading">Armas</div>
-      <div id="weaponList" class="shopList"></div>
+    <div id="armoryTabs" class="armoryTabs">
+      <button class="armoryTab active" data-tab="weapons">⚔️ Armas</button>
+      <button class="armoryTab" data-tab="armor">🛡️ Escudos</button>
+      <button class="armoryTab" data-tab="favors">✨ Favores</button>
     </div>
-    <div class="shopSection">
-      <div class="shopHeading">Armaduras</div>
-      <div id="armorList" class="shopList"></div>
+    <div id="armoryPanels" class="armoryPanels">
+      <div class="armoryPanel active" data-panel="weapons">
+        <div class="shopSection">
+          <div id="weaponList" class="shopList"></div>
+        </div>
+      </div>
+      <div class="armoryPanel" data-panel="armor">
+        <div class="shopSection">
+          <div id="armorList" class="shopList"></div>
+        </div>
+      </div>
+      <div class="armoryPanel" data-panel="favors">
+        <p class="favorHint">Favores Divinos: bendiciones permanentes de los dioses que potencian tu arma y escudo, sin importar el nivel que tengan equipado.</p>
+        <div class="shopSection">
+          <div class="shopHeading">Favor de Ares (arma)</div>
+          <div id="weaponFavorList" class="shopList"></div>
+        </div>
+        <div class="shopSection">
+          <div class="shopHeading">Favor de Atenea (escudo)</div>
+          <div id="armorFavorList" class="shopList"></div>
+        </div>
+      </div>
     </div>
     <button id="btnArmoryBack" class="btn">VOLVER</button>
   </div>

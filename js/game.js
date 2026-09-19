@@ -290,22 +290,60 @@ function computeDayT(z) {
 
 // ---------- Progression: weapons, armor, enemy types, boss themes ----------
 // Weapon tier: raises effective offense (player.count * power) in combat
-// math, and recolors the ranged bolts.
+// math, and recolors the ranged bolts. `rarity` tints the shop row's accent
+// bar so the growing roster reads at a glance (common bronze -> legendary gold).
 const WEAPON_TIERS = [
-  { name: 'Espada de Bronce', power: 1.0, cost: 0, laser: '#ffe066' },
-  { name: 'Lanza de Hierro', power: 1.3, cost: 25, laser: '#cfeaff' },
-  { name: 'Jabalina de Fuego', power: 1.7, cost: 60, laser: '#ff9a52' },
-  { name: 'Rayo de Zeus', power: 2.3, cost: 120, laser: '#e0b3ff' },
+  { name: 'Espada de Bronce', power: 1.0, cost: 0, laser: '#ffe066', rarity: '#c9973f', statText: 'Poder x1.00' },
+  { name: 'Lanza de Hierro', power: 1.3, cost: 25, laser: '#cfeaff', rarity: '#9aa4ab', statText: 'Poder x1.30' },
+  { name: 'Jabalina de Fuego', power: 1.7, cost: 60, laser: '#ff9a52', rarity: '#ff7a3c', statText: 'Poder x1.70' },
+  { name: 'Rayo de Zeus', power: 2.3, cost: 120, laser: '#e0b3ff', rarity: '#b98bff', statText: 'Poder x2.30' },
+  { name: 'Tridente de Poseidón', power: 3.0, cost: 220, laser: '#4ad1ff', rarity: '#2fb8e0', statText: 'Poder x3.00' },
+  { name: 'Hoz de Cronos', power: 3.9, cost: 380, laser: '#a06bff', rarity: '#5a2e8a', statText: 'Poder x3.90' },
+  { name: 'Arco de Apolo', power: 5.0, cost: 620, laser: '#fff3b0', rarity: '#ffd23f', statText: 'Poder x5.00' },
+  { name: 'Espada de Aquiles', power: 6.3, cost: 950, laser: '#ff4d4d', rarity: '#e02f2f', statText: 'Poder x6.30' },
+  { name: 'Lanza de Atenea', power: 7.8, cost: 1400, laser: '#baffc9', rarity: '#4fae66', statText: 'Poder x7.80' },
+  { name: 'Trueno del Olimpo', power: 9.5, cost: 2000, laser: '#fff8e0', rarity: '#ffd700', statText: 'Poder x9.50' },
 ];
 // Armor tier: mitigates enemy effective threat and reduces casualties on a
 // win. Spartans fight bare-chested, so this tier instead reskins the shield
-// (bronze -> iron -> silver -> the radiant Aegis) — a hoplite's real pride.
+// (bronze -> iron -> silver -> the radiant Aegis, and beyond) — a hoplite's
+// real pride.
 const ARMOR_TIERS = [
-  { name: 'Escudo de Bronce', defense: 0.0, cost: 0, body: '#c9973f', bodyDark: '#7a5620' },
-  { name: 'Escudo de Hierro', defense: 0.15, cost: 25, body: '#a9b2ba', bodyDark: '#5b636a' },
-  { name: 'Escudo de Plata', defense: 0.30, cost: 60, body: '#dfe6ea', bodyDark: '#8b939a' },
-  { name: 'Escudo de Aegis', defense: 0.45, cost: 120, body: '#fff3c4', bodyDark: '#e0b84a' },
+  { name: 'Escudo de Bronce', defense: 0.00, cost: 0, body: '#c9973f', bodyDark: '#7a5620', rarity: '#c9973f', statText: 'Defensa 0%' },
+  { name: 'Escudo de Hierro', defense: 0.15, cost: 25, body: '#a9b2ba', bodyDark: '#5b636a', rarity: '#9aa4ab', statText: 'Defensa 15%' },
+  { name: 'Escudo de Plata', defense: 0.30, cost: 60, body: '#dfe6ea', bodyDark: '#8b939a', rarity: '#c7ccd1', statText: 'Defensa 30%' },
+  { name: 'Escudo de Aegis', defense: 0.45, cost: 120, body: '#fff3c4', bodyDark: '#e0b84a', rarity: '#ffd700', statText: 'Defensa 45%' },
+  { name: 'Escudo Espartano', defense: 0.55, cost: 220, body: '#8a1f1f', bodyDark: '#4a0f0f', rarity: '#c93a2a', statText: 'Defensa 55%' },
+  { name: 'Escudo de Poseidón', defense: 0.63, cost: 380, body: '#2f7d9e', bodyDark: '#164152', rarity: '#4ad1ff', statText: 'Defensa 63%' },
+  { name: 'Escudo de Atenea', defense: 0.70, cost: 600, body: '#5a7d4a', bodyDark: '#2e4526', rarity: '#8fce6a', statText: 'Defensa 70%' },
+  { name: 'Escudo de Titán', defense: 0.76, cost: 950, body: '#5a4632', bodyDark: '#2e2216', rarity: '#8a6b45', statText: 'Defensa 76%' },
+  { name: 'Escudo de Hefesto', defense: 0.82, cost: 1400, body: '#ff8a2a', bodyDark: '#a3480c', rarity: '#ff8a2a', statText: 'Defensa 82%' },
+  { name: 'Escudo del Olimpo', defense: 0.90, cost: 2000, body: '#f5f8ff', bodyDark: '#c7d2f0', rarity: '#ffffff', statText: 'Defensa 90%' },
 ];
+
+// ---------- Favores Divinos ("Divine Favors") — booster system ----------
+// A second, independent progression track layered on top of the equipped
+// weapon/shield tier: a permanent blessing from a god that multiplies weapon
+// power or adds to shield defense. Bought/equipped separately from tiers so
+// the player always has two things to save dracmas toward.
+const WEAPON_FAVORS = [
+  { name: 'Sin Favor', mult: 1.00, cost: 0, rarity: '#8a8478', statText: 'Sin bono' },
+  { name: 'Favor de Ares I', mult: 1.10, cost: 150, rarity: '#c93a2a', statText: '+10% Poder' },
+  { name: 'Favor de Ares II', mult: 1.22, cost: 420, rarity: '#ff5533', statText: '+22% Poder' },
+  { name: 'Favor de Ares III', mult: 1.38, cost: 900, rarity: '#ff3300', statText: '+38% Poder' },
+];
+const ARMOR_FAVORS = [
+  { name: 'Sin Favor', bonus: 0.00, cost: 0, rarity: '#8a8478', statText: 'Sin bono' },
+  { name: 'Favor de Atenea I', bonus: 0.05, cost: 150, rarity: '#8fce6a', statText: '+5% Defensa' },
+  { name: 'Favor de Atenea II', bonus: 0.11, cost: 420, rarity: '#5fae4a', statText: '+11% Defensa' },
+  { name: 'Favor de Atenea III', bonus: 0.18, cost: 900, rarity: '#3f8a30', statText: '+18% Defensa' },
+];
+function effectiveWeaponPower() {
+  return WEAPON_TIERS[save.weaponTier].power * WEAPON_FAVORS[save.weaponFavor].mult;
+}
+function effectiveArmorDefense() {
+  return Math.min(0.95, ARMOR_TIERS[save.armorTier].defense + ARMOR_FAVORS[save.armorFavor].bonus);
+}
 
 // Per-warrior visual variation (skin tone, cape shade, crest) so no two
 // hoplites in a phalanx look quite identical. Cycled deterministically by
@@ -386,10 +424,12 @@ function loadSave() {
         bank: parsed.bank | 0,
         weaponTier: Math.max(0, Math.min(WEAPON_TIERS.length - 1, parsed.weaponTier | 0)),
         armorTier: Math.max(0, Math.min(ARMOR_TIERS.length - 1, parsed.armorTier | 0)),
+        weaponFavor: Math.max(0, Math.min(WEAPON_FAVORS.length - 1, parsed.weaponFavor | 0)),
+        armorFavor: Math.max(0, Math.min(ARMOR_FAVORS.length - 1, parsed.armorFavor | 0)),
       };
     }
   } catch (e) { /* localStorage unavailable, fall back to defaults */ }
-  return { bank: 0, weaponTier: 0, armorTier: 0 };
+  return { bank: 0, weaponTier: 0, armorTier: 0, weaponFavor: 0, armorFavor: 0 };
 }
 function persistSave() {
   try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) { /* ignore */ }
@@ -782,6 +822,62 @@ function drawStars(dayT) {
   ctx.restore();
 }
 
+// Occasional bird flybys: small flocks that cross the sky at random
+// intervals, purely decorative (screen-space, not world-space like the 3D
+// engine below) — same trick as clouds/stars.
+const birds = [];
+let birdTimer = 5 + Math.random() * 8;
+function spawnBirdFlock() {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  const count = 3 + Math.floor(Math.random() * 4);
+  const y = HORIZON_Y * (0.1 + Math.random() * 0.28);
+  const speed = (24 + Math.random() * 16) * dir;
+  const offsets = [];
+  for (let i = 0; i < count; i++) {
+    offsets.push({
+      dx: -i * 15 * dir + (Math.random() * 6 - 3),
+      dy: Math.floor((i + 1) / 2) * 6 * (i % 2 === 0 ? -1 : 1) + (Math.random() * 4 - 2),
+      phase: Math.random() * Math.PI * 2,
+    });
+  }
+  birds.push({ dir, y, speed, offsets, x: dir > 0 ? -90 : W + 90, life: 0 });
+}
+function updateBirds(dt) {
+  birdTimer -= dt;
+  if (birdTimer <= 0) {
+    spawnBirdFlock();
+    birdTimer = 14 + Math.random() * 18;
+  }
+  for (let i = birds.length - 1; i >= 0; i--) {
+    const f = birds[i];
+    f.x += f.speed * dt;
+    f.life += dt;
+    if ((f.dir > 0 && f.x > W + 100) || (f.dir < 0 && f.x < -100)) birds.splice(i, 1);
+  }
+}
+function drawBirds(dayT) {
+  if (!birds.length) return;
+  ctx.save();
+  ctx.strokeStyle = dayT > 0.55 ? 'rgba(220,226,240,0.7)' : 'rgba(20,16,12,0.6)';
+  ctx.lineWidth = 1.6;
+  ctx.lineCap = 'round';
+  for (const f of birds) {
+    ctx.globalAlpha = Math.max(0, Math.min(1, f.life * 2));
+    for (const o of f.offsets) {
+      const bx = f.x + o.dx;
+      const by = f.y + o.dy;
+      const flap = 0.35 + 0.65 * Math.abs(Math.sin(atmosphereT * 9 + o.phase));
+      const s = 6;
+      ctx.beginPath();
+      ctx.moveTo(bx - s, by - flap * s * 0.7);
+      ctx.quadraticCurveTo(bx - s * 0.35, by - flap * s * 1.2, bx, by);
+      ctx.quadraticCurveTo(bx + s * 0.35, by - flap * s * 1.2, bx + s, by - flap * s * 0.7);
+      ctx.stroke();
+    }
+  }
+  ctx.restore();
+}
+
 function drawBackground() {
   const dayT = computeDayT(player.z);
   const sky1 = lerpColor(COL.sky1, NIGHT.sky1, dayT);
@@ -813,6 +909,8 @@ function drawBackground() {
     const cy = HORIZON_Y * (0.16 + (i % 3) * 0.13);
     drawCloud(cx, cy, 34 + (i % 3) * 10, (0.5 - i * 0.06) * (1 - dayT * 0.75));
   }
+
+  drawBirds(dayT);
 
   // hazy distant mountains, two parallax layers
   drawMountainLayer(HORIZON_Y, HORIZON_Y * 0.22, mtn1, 0.55, 0.01, 4.1);
@@ -1665,8 +1763,7 @@ function updateBoss(dt) {
   if (!boss || !boss.alive) return;
   boss.spawnT += dt;
   if (boss.spawnT < 0.4) return;
-  const weapon = WEAPON_TIERS[save.weaponTier];
-  const dps = (14 + player.count * 4) * weapon.power;
+  const dps = (14 + player.count * 4) * effectiveWeaponPower();
   boss.hp -= dps * dt;
   boss.shakeT += dt;
   els.bossHpBar.style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
@@ -1725,6 +1822,10 @@ const els = {
   bankAmount2: document.getElementById('bankAmount2'),
   weaponList: document.getElementById('weaponList'),
   armorList: document.getElementById('armorList'),
+  weaponFavorList: document.getElementById('weaponFavorList'),
+  armorFavorList: document.getElementById('armorFavorList'),
+  armoryTabs: document.getElementById('armoryTabs'),
+  armoryPanels: document.getElementById('armoryPanels'),
 };
 
 function updateBankDisplays() {
@@ -1828,16 +1929,18 @@ document.getElementById('btnStart').addEventListener('click', () => {
 document.getElementById('btnRetry').addEventListener('click', () => { resetGame(); showScreen(null); });
 document.getElementById('btnAgain').addEventListener('click', () => { resetGame(); showScreen(null); });
 
-// ---------- Armory (upgrade shop) ----------
+// ---------- Armory (dynamic upgrade shop) ----------
+// One generic row renderer shared by weapon tiers, armor tiers, and both
+// Favor tracks — each is just "a sequential list you own up to index N".
 function renderShopList(container, tiers, currentTierKey, onBuy) {
   container.innerHTML = '';
   const currentTier = save[currentTierKey];
   tiers.forEach((tier, i) => {
     const row = document.createElement('div');
     row.className = 'shopRow';
+    row.style.borderLeft = `4px solid ${tier.rarity || 'rgba(230,190,90,0.4)'}`;
     const owned = i <= currentTier;
     const isNext = i === currentTier + 1;
-    const statLabel = tier.power !== undefined ? `Poder x${tier.power.toFixed(2)}` : `Defensa ${Math.round(tier.defense * 100)}%`;
     let actionHtml;
     if (owned) {
       actionHtml = i === currentTier ? '<span class="shopStatus equipped">EQUIPADO</span>' : '<span class="shopStatus">poseído</span>';
@@ -1847,7 +1950,7 @@ function renderShopList(container, tiers, currentTierKey, onBuy) {
     } else {
       actionHtml = '<span class="shopStatus locked">🔒</span>';
     }
-    row.innerHTML = `<div class="shopInfo"><div class="shopName">${tier.name}</div><div class="shopStat">${statLabel}</div></div>${actionHtml}`;
+    row.innerHTML = `<div class="shopInfo"><div class="shopName">${tier.name}</div><div class="shopStat">${tier.statText}</div></div>${actionHtml}`;
     container.appendChild(row);
   });
   container.querySelectorAll('.shopBuy').forEach(btn => {
@@ -1858,30 +1961,42 @@ function renderShopList(container, tiers, currentTierKey, onBuy) {
   });
 }
 
+function buySequential(tiers, currentTierKey, idx) {
+  const tier = tiers[idx];
+  if (save.bank < tier.cost || idx !== save[currentTierKey] + 1) return;
+  save.bank -= tier.cost;
+  save[currentTierKey] = idx;
+  persistSave();
+  AudioFX.coin();
+  renderArmory();
+}
+
 function renderArmory() {
   updateBankDisplays();
-  renderShopList(els.weaponList, WEAPON_TIERS, 'weaponTier', (idx) => {
-    const tier = WEAPON_TIERS[idx];
-    if (save.bank < tier.cost || idx !== save.weaponTier + 1) return;
-    save.bank -= tier.cost;
-    save.weaponTier = idx;
-    persistSave();
-    AudioFX.coin();
-    renderArmory();
+  renderShopList(els.weaponList, WEAPON_TIERS, 'weaponTier', (idx) => buySequential(WEAPON_TIERS, 'weaponTier', idx));
+  renderShopList(els.armorList, ARMOR_TIERS, 'armorTier', (idx) => buySequential(ARMOR_TIERS, 'armorTier', idx));
+  renderShopList(els.weaponFavorList, WEAPON_FAVORS, 'weaponFavor', (idx) => buySequential(WEAPON_FAVORS, 'weaponFavor', idx));
+  renderShopList(els.armorFavorList, ARMOR_FAVORS, 'armorFavor', (idx) => buySequential(ARMOR_FAVORS, 'armorFavor', idx));
+}
+
+// Dynamic menu: three tabs (Armas / Escudos / Favores) share one screen and
+// swap which panel is visible instead of stacking every list at once — the
+// roster is now 10+10+4+4 rows deep, too much to show all together.
+function showArmoryTab(tab) {
+  els.armoryTabs.querySelectorAll('.armoryTab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === tab);
   });
-  renderShopList(els.armorList, ARMOR_TIERS, 'armorTier', (idx) => {
-    const tier = ARMOR_TIERS[idx];
-    if (save.bank < tier.cost || idx !== save.armorTier + 1) return;
-    save.bank -= tier.cost;
-    save.armorTier = idx;
-    persistSave();
-    AudioFX.coin();
-    renderArmory();
+  els.armoryPanels.querySelectorAll('.armoryPanel').forEach(panel => {
+    panel.classList.toggle('active', panel.dataset.panel === tab);
   });
 }
+els.armoryTabs.querySelectorAll('.armoryTab').forEach(btn => {
+  btn.addEventListener('click', () => showArmoryTab(btn.dataset.tab));
+});
 
 document.getElementById('btnArmory').addEventListener('click', () => {
   renderArmory();
+  showArmoryTab('weapons');
   showScreen(els.screenArmory);
 });
 document.getElementById('btnArmoryBack').addEventListener('click', () => {
@@ -1921,13 +2036,12 @@ function handleObstacles() {
       const sameLaneish = Math.abs(player.x - LANES[o.laneIdx]) < 1.15;
       if (sameLaneish && dz > -1.2 && dz < 1.4) {
         o.used = true;
-        const weapon = WEAPON_TIERS[save.weaponTier];
-        const armor = ARMOR_TIERS[save.armorTier];
         const etype = ENEMY_TYPES[o.etype] || ENEMY_TYPES.raso;
-        const effPlayer = player.count * weapon.power;
-        const effEnemy = o.count * etype.power * (1 - armor.defense);
+        const armorDef = effectiveArmorDefense();
+        const effPlayer = player.count * effectiveWeaponPower();
+        const effEnemy = o.count * etype.power * (1 - armorDef);
         if (effPlayer > effEnemy) {
-          const losses = Math.max(1, Math.round(o.count * (1 - armor.defense * 0.5)));
+          const losses = Math.max(1, Math.round(o.count * (1 - armorDef * 0.5)));
           player.count = Math.max(1, player.count - losses);
           state.enemyDefeated += o.count;
           spawnExplosion(LANES[o.laneIdx], o.z, '#ff5533');
@@ -1990,6 +2104,7 @@ function animate(now) {
   updateLasers(dt);
   updateParticles(dt);
   updateRunDust(dt);
+  updateBirds(dt);
   updateCamera();
   screenShakeMag *= 0.88;
   flashAlpha = Math.max(0, flashAlpha - dt * 2.2);

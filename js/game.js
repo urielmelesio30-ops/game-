@@ -11,7 +11,7 @@
 const LANES = [-2.2, 0, 2.2];
 const FORWARD_SPEED = 11;
 const LANE_LERP = 0.18;
-const LEVEL_END_Z = -800;
+const LEVEL_END_Z = -1800;
 const WORLD_START_Z = 30;
 const MAX_DISPLAY = 130; // sprite cap for perf; real squad count is uncapped in math
 const FAR_CLIP = 340; // max render distance
@@ -265,7 +265,13 @@ const NIGHT = {
   mtn1: '#2c3660', mtn2: '#1c2444',
 };
 
+// Accepts '#rrggbb' or 'rgb(r,g,b)' — lerpColor's own output feeds back into
+// itself when biome blending chains onto an already-blended day/night color.
 function hexToRgb(hex) {
+  if (hex.charCodeAt(0) !== 35 /* '#' */) {
+    const m = hex.match(/[\d.]+/g);
+    return [+m[0], +m[1], +m[2]];
+  }
   const n = parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
@@ -279,12 +285,13 @@ function lerpColor(hexA, hexB, t) {
   return `rgb(${r},${g},${bl})`;
 }
 
-// 0 = full day, 1 = full night — day holds through acts 1-2, dusk creeps in
-// around Talos (act 3), and it's fully dark by the time Ares appears.
+// 0 = full day, 1 = full night — day holds through the early gods, dusk
+// creeps in around Odín, and it's fully dark by the time Zeus appears.
+// (Bosses with their own `biome` override this entirely during their fight.)
 function computeDayT(z) {
-  if (z >= -400) return 0;
-  if (z >= -600) return ((-400 - z) / 200) * 0.4;
-  if (z >= -750) return 0.4 + ((-600 - z) / 150) * 0.6;
+  if (z >= -900) return 0;
+  if (z >= -1400) return ((-900 - z) / 500) * 0.5;
+  if (z >= -1650) return 0.5 + ((-1400 - z) / 250) * 0.5;
   return 1;
 }
 
@@ -388,30 +395,83 @@ const ENEMY_TYPES = {
   },
 };
 
-// Boss themes: each mini/final boss reuses the same Talos-style rig but with
-// a visibly different palette, weapon, size and name so no two encounters
-// look identical.
+// Boss themes: a pantheon of 9 Greek (and one Norse guest, Odín) gods and
+// legends, one per checkpoint. Each reuses the same rig-building pipeline
+// but `morph` swaps out whole body parts (snake-hair instead of a helmet,
+// a serpent tail instead of legs, a lion pelt, a beard...) so every god
+// reads as a genuinely different creature, not just a recolor. `biome`
+// and `weather` drive a full environment swap while that boss is up —
+// see BIOME_PALETTES / updateWeather — and `divine` (with optional
+// `fireColors`/`fireGlow`) drives the elemental flourish wreathing their
+// weapon (fire, lightning, sea-spray...).
 const BOSS_THEMES = [
   {
-    name: 'ARGOS, CENTINELA DE BRONCE', weapon: 'sword', scale: 1.0, maxHp: 260,
-    body: '#b8823c', bodyDark: '#6b4a1f', crest: '#8b2e1f', eye: '#ff8a2a', shield: '#b8823c', shieldDark: '#6b4a1f', metal: '#dfe6ea',
+    name: 'MEDUSA, LA GORGONA', weapon: 'sword', scale: 1.05, maxHp: 300, morph: 'gorgon',
+    biome: 'petrified', weather: null,
+    body: '#7a9e6a', bodyDark: '#3f5c34', crest: '#8a9e78', eye: '#ffe066', shield: '#9aa89a', shieldDark: '#5a6a56', metal: '#c9c9c9',
   },
   {
-    name: 'CRONOS MENOR, EL ACORAZADO', weapon: 'axe', scale: 1.15, maxHp: 360,
-    body: '#8e97a0', bodyDark: '#454b52', crest: '#1c1c1c', eye: '#4ad1ff', shield: '#8e97a0', shieldDark: '#454b52', metal: '#e9edf0',
+    name: 'CRONOS, TITÁN DEL TIEMPO', weapon: 'scythe', scale: 1.2, maxHp: 380, morph: 'titan',
+    biome: 'temporal', weather: 'ash',
+    body: '#6a5a4a', bodyDark: '#362c22', crest: '#c9a45a', eye: '#c9a45a', shield: '#5a4a3a', shieldDark: '#2e2418', metal: '#c9a45a',
   },
   {
-    name: 'TALOS, EL COLOSO DE BRONCE', weapon: 'hammer', scale: 1.35, maxHp: 480,
-    body: '#c9973f', bodyDark: '#7a5620', crest: '#f6f1e2', eye: '#ff8a2a', shield: '#c9973f', shieldDark: '#7a5620', metal: '#fff3c4',
+    name: 'AFRODITA, DIOSA DEL AMOR', weapon: 'scepter', scale: 0.95, maxHp: 300, morph: 'goddess',
+    biome: 'blossom', weather: 'petals',
+    body: '#ffd9ea', bodyDark: '#e0a8c0', crest: '#fff0c9', eye: '#ff6fae', shield: '#ffe6f2', shieldDark: '#e8b8d0', metal: '#ffd700',
   },
   {
-    // The true final boss: Ares himself, arriving as night falls. Same rig,
-    // vastly bigger, wreathed in a divine fire that the other bosses don't
-    // have (see the `divine` flag, used by drawBoss to add flame + lightning).
-    name: 'ARES, DIOS DE LA GUERRA', weapon: 'spear', scale: 1.85, maxHp: 900, divine: true,
+    name: 'HÉRCULES, EL SEMIDIÓS', weapon: 'club', scale: 1.3, maxHp: 460, morph: 'hero',
+    biome: 'inferno', weather: 'ash',
+    body: '#c98a54', bodyDark: '#8f5c34', crest: '#8a6a3a', eye: '#ff8a2a', shield: '#c98a54', shieldDark: '#8f5c34', metal: '#8a6a3a',
+  },
+  {
+    name: 'ARES, DIOS DE LA GUERRA', weapon: 'spear', scale: 1.5, maxHp: 560, morph: 'warrior', divine: true,
+    biome: 'warzone', weather: null,
     body: '#6e1210', bodyDark: '#2e0705', crest: '#161616', eye: '#ff3300', shield: '#1c0e0c', shieldDark: '#0c0504', metal: '#3a1512',
   },
+  {
+    name: 'ODÍN, EL PADRE DE TODO', weapon: 'spear', scale: 1.35, maxHp: 620, morph: 'allfather',
+    biome: 'aurora', weather: 'snow',
+    body: '#4a5a68', bodyDark: '#242e38', crest: '#dfe6ea', eye: '#ffe066', shield: '#5a6a78', shieldDark: '#2e3a42', metal: '#c9d2da',
+  },
+  {
+    // The player's own phalanx boards Poseidón's ship for this fight — see
+    // drawOceanScene(), swapped in for the usual floor/scenery while
+    // biome === 'ocean' — with sirens singing from the wreckage nearby.
+    name: 'POSEIDÓN, DIOS DEL MAR', weapon: 'trident', scale: 1.4, maxHp: 680, morph: 'seagod', divine: true,
+    fireColors: ['#4ad1ff', '#eaffff'], fireGlow: '#1a6a9e',
+    biome: 'ocean', weather: null,
+    body: '#2f6a86', bodyDark: '#163a4a', crest: '#4ad1ff', eye: '#baf0ff', shield: '#1a4a5e', shieldDark: '#0c2a36', metal: '#bfe6f2',
+  },
+  {
+    name: 'CRÁTOS, LA FUERZA ETERNA', weapon: 'chain', scale: 1.45, maxHp: 760, morph: 'enforcer',
+    biome: 'shadow', weather: null,
+    body: '#3a3630', bodyDark: '#1c1a16', crest: '#8a1414', eye: '#ff3300', shield: '#2a2622', shieldDark: '#141210', metal: '#5a5650',
+  },
+  {
+    // The true final boss: Zeus himself, king of Olympus, wreathed in a
+    // real thunderstorm — see BIOME_PALETTES.storm / weather 'rain'.
+    name: 'ZEUS, REY DEL OLIMPO', weapon: 'bolt', scale: 1.9, maxHp: 950, morph: 'king', divine: true,
+    fireColors: ['#dff0ff', '#fff8c0'], fireGlow: '#aee0ff',
+    biome: 'storm', weather: 'rain',
+    body: '#e8c874', bodyDark: '#9c7a2e', crest: '#fff8e0', eye: '#fff2a0', shield: '#e8c874', shieldDark: '#9c7a2e', metal: '#fff8e0',
+  },
 ];
+
+// Environment palette swap while a themed boss is active — overrides the
+// normal day/night sky/ground colors entirely for the duration of the fight.
+const BIOME_PALETTES = {
+  petrified: { sky1: '#8a8f96', sky2: '#6b6f75', sky3: '#3f4247', fog: '#7a7e84', sand1: '#9a9a92', sand2: '#6e6e66', mtn1: '#5a5d62', mtn2: '#3a3d42' },
+  temporal: { sky1: '#4a3a6b', sky2: '#2a1f45', sky3: '#140d24', fog: '#3a2d5c', sand1: '#4a3f5a', sand2: '#2e2640', mtn1: '#3a2e55', mtn2: '#221a38' },
+  blossom: { sky1: '#ffd6e8', sky2: '#ffb6d5', sky3: '#ff8fc0', fog: '#ffe0ee', sand1: '#ffe9d6', sand2: '#f2c9a8', mtn1: '#ffc2dd', mtn2: '#ff9fc8' },
+  inferno: { sky1: '#ffb066', sky2: '#e2601f', sky3: '#6e1a08', fog: '#c94a1a', sand1: '#8a3a1a', sand2: '#5a2410', mtn1: '#7a2c10', mtn2: '#4a1a0a' },
+  warzone: { sky1: '#7a1c1c', sky2: '#4a0f0f', sky3: '#1c0505', fog: '#5a1414', sand1: '#3a1414', sand2: '#220a0a', mtn1: '#3a1010', mtn2: '#1c0808' },
+  aurora: { sky1: '#bfe8e0', sky2: '#5fa0b0', sky3: '#1c2c48', fog: '#8fc8c0', sand1: '#c8d8d0', sand2: '#8aa098', mtn1: '#3a5868', mtn2: '#1c2c40' },
+  ocean: { sky1: '#bfe0ff', sky2: '#5fa8d8', sky3: '#144a78', fog: '#7fc0e8', sand1: '#1a4a6a', sand2: '#0e2c42', mtn1: '#2a6088', mtn2: '#123650' },
+  shadow: { sky1: '#3a3a42', sky2: '#1e1e26', sky3: '#0a0a10', fog: '#2a2a32', sand1: '#2a2a30', sand2: '#161618', mtn1: '#26262e', mtn2: '#121216' },
+  storm: { sky1: '#5a6272', sky2: '#333a48', sky3: '#14161e', fog: '#454c5c', sand1: '#3a3e48', sand2: '#22242c', mtn1: '#2e3440', mtn2: '#181c24' },
+};
 
 // ---------- Save data: persistent bank + equipped gear across runs ----------
 const SAVE_KEY = 'falangeDorada_save_v1';
@@ -436,14 +496,13 @@ function persistSave() {
 }
 const save = loadSave();
 
-// Boss checkpoints along the run — one every ~200 units, the last one at
-// the level's end. Each uses a different BOSS_THEMES entry.
-const bossCheckpoints = [
-  { z: -200, theme: BOSS_THEMES[0] },
-  { z: -400, theme: BOSS_THEMES[1] },
-  { z: -600, theme: BOSS_THEMES[2] },
-  { z: LEVEL_END_Z, theme: BOSS_THEMES[3] },
-];
+// Boss checkpoints along the run — one every 200 units, the last (Zeus) at
+// the level's end. Each uses a different BOSS_THEMES entry, in escalating
+// order of power.
+const bossCheckpoints = BOSS_THEMES.map((theme, i) => ({
+  z: i === BOSS_THEMES.length - 1 ? LEVEL_END_Z : -200 * (i + 1),
+  theme,
+}));
 
 // ---------- World scenery (static): a marble colonnade flanking the path,
 // with temple-facade gateways (columns + architrave + pediment) spanning it
@@ -880,14 +939,30 @@ function drawBirds(dayT) {
 
 function drawBackground() {
   const dayT = computeDayT(player.z);
-  const sky1 = lerpColor(COL.sky1, NIGHT.sky1, dayT);
-  const sky2 = lerpColor(COL.sky2, NIGHT.sky2, dayT);
-  const sky3 = lerpColor(COL.sky3, NIGHT.sky3, dayT);
-  const fog = lerpColor(COL.fog, NIGHT.fog, dayT);
-  const sand1 = lerpColor(COL.sand1, NIGHT.sand1, dayT);
-  const sand2 = lerpColor(COL.sand2, NIGHT.sand2, dayT);
-  const mtn1 = lerpColor('#a9c3dd', NIGHT.mtn1, dayT);
-  const mtn2 = lerpColor('#8fb3d6', NIGHT.mtn2, dayT);
+  let sky1 = lerpColor(COL.sky1, NIGHT.sky1, dayT);
+  let sky2 = lerpColor(COL.sky2, NIGHT.sky2, dayT);
+  let sky3 = lerpColor(COL.sky3, NIGHT.sky3, dayT);
+  let fog = lerpColor(COL.fog, NIGHT.fog, dayT);
+  let sand1 = lerpColor(COL.sand1, NIGHT.sand1, dayT);
+  let sand2 = lerpColor(COL.sand2, NIGHT.sand2, dayT);
+  let mtn1 = lerpColor('#a9c3dd', NIGHT.mtn1, dayT);
+  let mtn2 = lerpColor('#8fb3d6', NIGHT.mtn2, dayT);
+
+  // A boss with its own biome (Medusa's petrified grey, Zeus's storm...)
+  // overrides the normal day/night palette entirely, blending in fast as
+  // the fight starts so the arrival reads as a real environment change.
+  const biome = (state.mode === 'boss' && boss && boss.theme.biome) ? BIOME_PALETTES[boss.theme.biome] : null;
+  if (biome) {
+    const bt = Math.min(1, boss.spawnT / 1.0);
+    sky1 = lerpColor(sky1, biome.sky1, bt);
+    sky2 = lerpColor(sky2, biome.sky2, bt);
+    sky3 = lerpColor(sky3, biome.sky3, bt);
+    fog = lerpColor(fog, biome.fog, bt);
+    sand1 = lerpColor(sand1, biome.sand1, bt);
+    sand2 = lerpColor(sand2, biome.sand2, bt);
+    mtn1 = lerpColor(mtn1, biome.mtn1, bt);
+    mtn2 = lerpColor(mtn2, biome.mtn2, bt);
+  }
 
   // sky
   const skyGrad = ctx.createLinearGradient(0, 0, 0, HORIZON_Y);
@@ -1448,7 +1523,7 @@ function spawnLevel() {
     { type: 'enemy', z: -550, lanes: [0, 2], count: 16, etype: 'elite' },
     { type: 'coins', z: -570, lanes: [0, 1, 2] },
 
-    // Act 4: boss 3 (Talos) -> Ares, the god of war (z -800), as night falls
+    // Act 4: boss 3 (Afrodita) -> Hércules (z -800)
     { type: 'gate', z: -630, op: 'x2' },
     { type: 'enemy', z: -655, lanes: [0, 1, 2], count: 12, etype: 'minimo' },
     { type: 'coins', z: -670, lanes: [0, 1, 2] },
@@ -1458,6 +1533,25 @@ function spawnLevel() {
     { type: 'gate', z: -745, op: '+5' },
     { type: 'enemy', z: -765, lanes: [0, 1, 2], count: 28, etype: 'elite' },
   ];
+
+  // Acts 5-9: boss 4 (Hércules) all the way to Zeus (z -1800), each act
+  // scaled up from the act-4 pattern so the run keeps escalating after the
+  // hand-authored early acts above.
+  const laterBossZs = [-800, -1000, -1200, -1400, -1600];
+  const mults = [1.2, 1.4, 1.65, 1.9, 2.2];
+  laterBossZs.forEach((baseZ, i) => {
+    const m = mults[i];
+    defs.push(
+      { type: 'gate', z: baseZ - 30, op: 'x2' },
+      { type: 'enemy', z: baseZ - 55, lanes: [0, 1, 2], count: Math.round(12 * m), etype: 'minimo' },
+      { type: 'coins', z: baseZ - 70, lanes: [0, 1, 2] },
+      { type: 'gate', z: baseZ - 90, op: 'x3' },
+      { type: 'enemy', z: baseZ - 115, lanes: [0, 1], count: Math.round(22 * m), etype: 'elite' },
+      { type: 'coins', z: baseZ - 130, lanes: [0, 1, 2] },
+      { type: 'gate', z: baseZ - 145, op: '+5' },
+      { type: 'enemy', z: baseZ - 165, lanes: [0, 1, 2], count: Math.round(28 * m), etype: 'elite' },
+    );
+  });
 
   defs.forEach(def => {
     if (def.type === 'gate') {
@@ -1575,15 +1669,35 @@ function buildBoss(checkpoint) {
 // creature.
 function buildBossParts(theme, shakeT, hpFrac) {
   const S = theme.scale;
+  const morph = theme.morph || 'warrior';
   const parts = [];
-
-  const legHalf = [0.22 * S, 0.75 * S, 0.24 * S];
-  const legY = 0.75 * S;
-  parts.push({ center: [-0.42 * S, legY, 0], half: legHalf, color: theme.bodyDark });
-  parts.push({ center: [0.42 * S, legY, 0], half: legHalf, color: theme.bodyDark });
-
   const legTop = 1.5 * S;
-  const torsoHalf = [1.05 * S, 0.85 * S, 0.55 * S];
+
+  if (morph === 'gorgon') {
+    // Medusa: a coiling serpent tail instead of legs, tapering thin at the
+    // ground and thick near the torso, swaying independently of any stride.
+    const segCount = 4;
+    const segFullH = legTop / segCount;
+    for (let i = 0; i < segCount; i++) {
+      const t = i / (segCount - 1);
+      const segHalfH = segFullH / 2;
+      const segY = segFullH * i + segHalfH;
+      const width = (0.16 + t * 0.2) * S;
+      const depth = (0.14 + t * 0.16) * S;
+      const sway = Math.sin(shakeT * 2.2 + i * 0.9) * 0.16 * S * (1 - t * 0.5);
+      parts.push({ center: [sway, segY, 0], half: [width, segHalfH, depth], color: i % 2 === 0 ? theme.body : theme.bodyDark });
+    }
+  } else {
+    const legHalf = [0.22 * S, 0.75 * S, 0.24 * S];
+    const legY = 0.75 * S;
+    parts.push({ center: [-0.42 * S, legY, 0], half: legHalf, color: theme.bodyDark });
+    parts.push({ center: [0.42 * S, legY, 0], half: legHalf, color: theme.bodyDark });
+  }
+
+  let torsoHalf = [1.05 * S, 0.85 * S, 0.55 * S];
+  if (morph === 'goddess') torsoHalf = [0.85 * S, 0.8 * S, 0.48 * S];
+  else if (morph === 'hero' || morph === 'enforcer') torsoHalf = [1.22 * S, 0.88 * S, 0.6 * S];
+  else if (morph === 'king') torsoHalf = [1.15 * S, 0.9 * S, 0.58 * S];
   const torsoCenterY = legTop + torsoHalf[1];
   const torsoTop = torsoCenterY + torsoHalf[1];
 
@@ -1614,11 +1728,45 @@ function buildBossParts(theme, shakeT, hpFrac) {
   } else if (theme.weapon === 'hammer') {
     parts.push({ center: [tip[0], tip[1] - 0.55 * S, tip[2]], half: [0.4 * S, 0.4 * S, 0.4 * S], color: theme.metal, rot: armRot });
     weaponFireAt = { local: [tip[0], tip[1] - 0.55 * S, tip[2]], rot: armRot };
-  } else if (theme.weapon === 'spear') {
+  } else if (theme.weapon === 'spear' || theme.weapon === 'trident') {
     parts.push({ center: [tip[0], tip[1] - 0.9 * S, tip[2]], half: [0.06 * S, 0.9 * S, 0.06 * S], color: theme.metal, rot: armRot });
-    parts.push({ center: [tip[0], tip[1] - 1.75 * S, tip[2]], half: [0.14 * S, 0.28 * S, 0.05 * S], color: theme.metal, rot: armRot });
     parts.push({ center: [tip[0], tip[1] - 1.35 * S, tip[2]], half: [0.2 * S, 0.06 * S, 0.06 * S], color: theme.bodyDark, rot: armRot });
-    weaponFireAt = { local: [tip[0], tip[1] - 2.0 * S, tip[2]], rot: armRot };
+    if (theme.weapon === 'trident') {
+      parts.push({ center: [tip[0], tip[1] - 2.1 * S, tip[2]], half: [0.05 * S, 0.35 * S, 0.05 * S], color: theme.metal, rot: armRot });
+      parts.push({ center: [tip[0] - 0.22 * S, tip[1] - 1.95 * S, tip[2]], half: [0.045 * S, 0.3 * S, 0.045 * S], color: theme.metal, rot: armRot });
+      parts.push({ center: [tip[0] + 0.22 * S, tip[1] - 1.95 * S, tip[2]], half: [0.045 * S, 0.3 * S, 0.045 * S], color: theme.metal, rot: armRot });
+      weaponFireAt = { local: [tip[0], tip[1] - 2.3 * S, tip[2]], rot: armRot };
+    } else {
+      parts.push({ center: [tip[0], tip[1] - 1.75 * S, tip[2]], half: [0.14 * S, 0.28 * S, 0.05 * S], color: theme.metal, rot: armRot });
+      weaponFireAt = { local: [tip[0], tip[1] - 2.0 * S, tip[2]], rot: armRot };
+    }
+  } else if (theme.weapon === 'scythe') {
+    parts.push({ center: [tip[0], tip[1] - 0.9 * S, tip[2]], half: [0.05 * S, 0.9 * S, 0.05 * S], color: theme.bodyDark, rot: armRot });
+    parts.push({ center: [tip[0] + 0.32 * S, tip[1] - 1.85 * S, tip[2]], half: [0.34 * S, 0.16 * S, 0.05 * S], color: theme.metal, rot: armRot });
+    parts.push({ center: [tip[0] + 0.55 * S, tip[1] - 2.05 * S, tip[2]], half: [0.16 * S, 0.28 * S, 0.05 * S], color: theme.metal, rot: armRot });
+    weaponFireAt = { local: [tip[0] + 0.4 * S, tip[1] - 2.0 * S, tip[2]], rot: armRot };
+  } else if (theme.weapon === 'club') {
+    parts.push({ center: [tip[0], tip[1] - 0.4 * S, tip[2]], half: [0.16 * S, 0.4 * S, 0.16 * S], color: theme.metal, rot: armRot });
+    parts.push({ center: [tip[0], tip[1] - 0.95 * S, tip[2]], half: [0.32 * S, 0.32 * S, 0.32 * S], color: theme.metal, rot: armRot });
+    weaponFireAt = { local: [tip[0], tip[1] - 1.1 * S, tip[2]], rot: armRot };
+  } else if (theme.weapon === 'scepter') {
+    parts.push({ center: [tip[0], tip[1] - 0.75 * S, tip[2]], half: [0.045 * S, 0.75 * S, 0.045 * S], color: theme.metal, rot: armRot });
+    parts.push({ kind: 'disc', center: [tip[0], tip[1] - 1.55 * S, tip[2]], normalAxis: [0, 0.3, 1], radius: 0.18 * S, segments: 8, color: theme.eye, rot: armRot });
+    weaponFireAt = { local: [tip[0], tip[1] - 1.7 * S, tip[2]], rot: armRot };
+  } else if (theme.weapon === 'chain') {
+    const linkCount = 5;
+    for (let i = 0; i < linkCount; i++) {
+      const sway = Math.sin(shakeT * 5 + i * 0.9) * (0.05 + i * 0.03) * S;
+      parts.push({ center: [tip[0] + sway, tip[1] - (0.3 + i * 0.32) * S, tip[2]], half: [0.1 * S, 0.14 * S, 0.1 * S], color: i % 2 === 0 ? theme.metal : theme.bodyDark, rot: armRot });
+    }
+    weaponFireAt = { local: [tip[0], tip[1] - (0.3 + (linkCount - 1) * 0.32) * S, tip[2]], rot: armRot };
+  } else if (theme.weapon === 'bolt') {
+    const zigs = [0, 0.22, -0.18, 0.24, 0];
+    for (let i = 0; i < zigs.length; i++) {
+      const segY = tip[1] - (0.35 + i * 0.4) * S;
+      parts.push({ center: [tip[0] + zigs[i] * S, segY, tip[2]], half: [0.1 * S, 0.24 * S, 0.08 * S], color: theme.metal, rot: armRot });
+    }
+    weaponFireAt = { local: [tip[0] + zigs[zigs.length - 1] * S, tip[1] - (0.35 + (zigs.length - 1) * 0.4) * S, tip[2]], rot: armRot };
   } else { // sword
     parts.push({ center: [tip[0], tip[1] - 0.55 * S, tip[2]], half: [0.09 * S, 0.55 * S, 0.05 * S], color: theme.metal, rot: armRot });
     parts.push({ center: [tip[0], tip[1] - 0.08 * S, tip[2]], half: [0.26 * S, 0.06 * S, 0.1 * S], color: theme.bodyDark, rot: armRot });
@@ -1628,15 +1776,69 @@ function buildBossParts(theme, shakeT, hpFrac) {
   // Torso
   parts.push({ center: [0, torsoCenterY, 0], half: torsoHalf, color: theme.body });
 
-  // Head + Corinthian helmet crest
+  // Head, with per-morph decorations replacing the default Corinthian
+  // helmet crest — snake hair, a titan's hood, a goddess's flowing locks,
+  // a lion pelt, Odín's hat/beard/raven, a coral crown, a spiked helm and
+  // chains, or a king's lightning-spike crown.
   const headHalf = [0.34 * S, 0.32 * S, 0.34 * S];
   const headCenterY = torsoTop + headHalf[1] + 0.08 * S;
   parts.push({ center: [0, headCenterY, 0], half: headHalf, color: theme.body });
-  parts.push({
-    center: [0, headCenterY + headHalf[1] + 0.16 * S, -0.02 * S], half: [0.42 * S, 0.16 * S, 0.58 * S], color: theme.crest,
-    rot: { axis: 'x', angle: -0.3, pivot: [0, headCenterY + headHalf[1], 0] },
-  });
-  parts.push({ center: [0, headCenterY - 0.02 * S, headHalf[2] * 0.7], half: [0.06 * S, 0.26 * S, 0.05 * S], color: theme.bodyDark });
+
+  if (morph === 'gorgon') {
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const ang = (i / (n - 1) - 0.5) * 2.6;
+      const wave = Math.sin(shakeT * 3 + i * 1.3) * 0.25;
+      const len = 0.36 * S;
+      const dx = Math.sin(ang) * len * 0.6;
+      const dz = Math.cos(ang) * len * 0.5 - headHalf[2] * 0.2;
+      parts.push({
+        center: [dx, headCenterY + headHalf[1] + 0.05 * S, dz], half: [0.045 * S, len * 0.5, 0.045 * S],
+        color: i % 2 === 0 ? '#5a7a3e' : '#3f5c2a',
+        rot: { axis: 'x', angle: 1.15 + wave * 0.4, pivot: [dx, headCenterY + headHalf[1], dz] },
+      });
+    }
+  } else if (morph === 'titan') {
+    parts.push({ center: [0, headCenterY + headHalf[1] * 0.7, -0.05 * S], half: [0.46 * S, 0.22 * S, 0.5 * S], color: theme.bodyDark });
+    parts.push({ kind: 'disc', center: [0, legTop + 0.1 * S, torsoHalf[2] + 0.12 * S], normalAxis: [0, 0.2, 1], radius: 0.22 * S, segments: 8, color: theme.crest, rot: null });
+    parts.push({ center: [0, headCenterY - headHalf[1] - 0.14 * S, headHalf[2] * 0.5], half: [0.14 * S, 0.18 * S, 0.1 * S], color: '#9a978a' });
+  } else if (morph === 'goddess') {
+    parts.push({ center: [0, headCenterY - 0.04 * S, -headHalf[2] * 0.9], half: [0.3 * S, 0.5 * S, 0.22 * S], color: theme.crest });
+    parts.push({ kind: 'disc', center: [0, headCenterY + headHalf[1] + 0.3 * S, 0], normalAxis: [0, 1, 0.2], radius: 0.14 * S, segments: 8, color: theme.eye, rot: null });
+  } else if (morph === 'hero') {
+    parts.push({ center: [0, headCenterY + headHalf[1] * 0.5, -0.08 * S], half: [0.44 * S, 0.34 * S, 0.4 * S], color: theme.crest });
+    parts.push({ center: [0, torsoCenterY + 0.1 * S, -torsoHalf[2] - 0.12 * S], half: [0.5 * S, 0.55 * S, 0.14 * S], color: theme.crest });
+  } else if (morph === 'allfather') {
+    parts.push({ kind: 'disc', center: [0, headCenterY + headHalf[1] + 0.02 * S, 0], normalAxis: [0, 1, 0], radius: 0.5 * S, segments: 10, color: theme.bodyDark, rot: null });
+    parts.push({ center: [0, headCenterY - headHalf[1] - 0.16 * S, headHalf[2] * 0.5], half: [0.16 * S, 0.2 * S, 0.12 * S], color: theme.metal });
+    parts.push({ center: [-1.0 * S, torsoTop + 0.05 * S, 0.15 * S], half: [0.12 * S, 0.1 * S, 0.18 * S], color: '#1c1c1c' });
+  } else if (morph === 'seagod') {
+    for (let i = -1; i <= 1; i++) {
+      parts.push({ center: [i * 0.16 * S, headCenterY + headHalf[1] + 0.14 * S, 0], half: [0.05 * S, 0.14 * S, 0.05 * S], color: theme.crest });
+    }
+    parts.push({ center: [0, headCenterY - headHalf[1] - 0.14 * S, headHalf[2] * 0.5], half: [0.16 * S, 0.18 * S, 0.12 * S], color: '#dfe9ec' });
+  } else if (morph === 'enforcer') {
+    parts.push({ center: [0, headCenterY + headHalf[1] + 0.05 * S, 0], half: [0.3 * S, 0.08 * S, 0.3 * S], color: theme.crest });
+    parts.push({ center: [-0.18 * S, headCenterY + headHalf[1] + 0.14 * S, 0], half: [0.04 * S, 0.1 * S, 0.04 * S], color: theme.metal });
+    parts.push({ center: [0.18 * S, headCenterY + headHalf[1] + 0.14 * S, 0], half: [0.04 * S, 0.1 * S, 0.04 * S], color: theme.metal });
+    parts.push({ center: [0, torsoCenterY, torsoHalf[2] + 0.03 * S], half: [torsoHalf[0] * 0.9, 0.05 * S, 0.03 * S], color: theme.metal, rot: { axis: 'z', angle: 0.5, pivot: [0, torsoCenterY, torsoHalf[2] + 0.03 * S] } });
+    parts.push({ center: [0, torsoCenterY, torsoHalf[2] + 0.03 * S], half: [torsoHalf[0] * 0.9, 0.05 * S, 0.03 * S], color: theme.metal, rot: { axis: 'z', angle: -0.5, pivot: [0, torsoCenterY, torsoHalf[2] + 0.03 * S] } });
+  } else if (morph === 'king') {
+    for (let i = -2; i <= 2; i++) {
+      const h = (0.16 - Math.abs(i) * 0.03) * S;
+      parts.push({ center: [i * 0.13 * S, headCenterY + headHalf[1] + h * 0.5 + 0.04 * S, 0], half: [0.035 * S, h * 0.5, 0.035 * S], color: theme.crest });
+    }
+    parts.push({ center: [0, headCenterY - headHalf[1] - 0.14 * S, headHalf[2] * 0.5], half: [0.18 * S, 0.2 * S, 0.13 * S], color: '#f5f0e0' });
+  } else {
+    // warrior (Ares) / default: the classic Corinthian helmet crest
+    parts.push({
+      center: [0, headCenterY + headHalf[1] + 0.16 * S, -0.02 * S], half: [0.42 * S, 0.16 * S, 0.58 * S], color: theme.crest,
+      rot: { axis: 'x', angle: -0.3, pivot: [0, headCenterY + headHalf[1], 0] },
+    });
+  }
+  if (morph !== 'gorgon') {
+    parts.push({ center: [0, headCenterY - 0.02 * S, headHalf[2] * 0.7], half: [0.06 * S, 0.26 * S, 0.05 * S], color: theme.bodyDark });
+  }
 
   return { parts, torsoCenterY, torsoHalf, headCenterY, weaponFireAt };
 }
@@ -1670,11 +1872,15 @@ function drawBoss() {
   drawActor3D(actor, rig.parts);
   ctx.restore();
 
-  // divine fire wreathing the weapon — only Ares (and any future god boss)
+  // divine elemental flourish wreathing the weapon — fire for Ares, electric
+  // arcs for Zeus, sea-spray for Poseidón (theme.fireColors/fireGlow pick
+  // the palette; default stays the original orange flame).
   if (theme.divine && rig.weaponFireAt) {
     const { local, rot } = rig.weaponFireAt;
     const rotated = rot ? rotateAroundPivot(local, rot.pivot, rot.axis, rot.angle) : local;
     const fireProj = project(rotated[0] + actor.x, rotated[1] + actor.y, rotated[2] + actor.z);
+    const fc = theme.fireColors || ['#ff5a1a', '#ffcf4a'];
+    const fg = theme.fireGlow || '#ff3300';
     if (fireProj.ok) {
       const fs = fireProj.scale * theme.scale;
       const t = runCycle * 8 + boss.shakeT * 3;
@@ -1686,8 +1892,8 @@ function drawBoss() {
         const fx = Math.sin(t * 1.6 + i * 2) * 0.1 * fs;
         const fy = -Math.abs(Math.cos(t * 1.3 + i)) * 0.18 * fs;
         const fh = (0.22 + fl * 0.18) * fs;
-        ctx.fillStyle = i % 2 === 0 ? '#ff5a1a' : '#ffcf4a';
-        ctx.shadowColor = '#ff3300';
+        ctx.fillStyle = i % 2 === 0 ? fc[0] : fc[1];
+        ctx.shadowColor = fg;
         ctx.shadowBlur = 10;
         ctx.beginPath();
         ctx.moveTo(fx - 0.06 * fs, fy);
@@ -1701,7 +1907,8 @@ function drawBoss() {
     }
   }
 
-  // glowing eyes + damage cracks/ichor glow, as a 2D overlay on the head/torso
+  // glowing eyes + damage cracks/ichor glow, as a 2D overlay on the head/torso.
+  // Odín (allfather) only has one eye — the other is hidden beneath his hat.
   const eyeProj = project(actor.x, rig.headCenterY, actor.z + 0.34 * theme.scale * 0.7);
   if (eyeProj.ok) {
     const es = eyeProj.scale * theme.scale;
@@ -1710,8 +1917,12 @@ function drawBoss() {
     ctx.fillStyle = theme.eye;
     ctx.shadowColor = theme.eye;
     ctx.shadowBlur = 14;
-    ctx.beginPath(); ctx.ellipse(eyeProj.sx - 0.13 * es, eyeProj.sy, 0.055 * es, 0.04 * es, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.beginPath(); ctx.ellipse(eyeProj.sx + 0.13 * es, eyeProj.sy, 0.055 * es, 0.04 * es, 0, 0, Math.PI * 2); ctx.fill();
+    if (theme.morph === 'allfather') {
+      ctx.beginPath(); ctx.ellipse(eyeProj.sx - 0.13 * es, eyeProj.sy, 0.065 * es, 0.05 * es, 0, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.ellipse(eyeProj.sx - 0.13 * es, eyeProj.sy, 0.055 * es, 0.04 * es, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(eyeProj.sx + 0.13 * es, eyeProj.sy, 0.055 * es, 0.04 * es, 0, 0, Math.PI * 2); ctx.fill();
+    }
     ctx.shadowBlur = 0;
     ctx.restore();
   }
@@ -1763,7 +1974,12 @@ function updateBoss(dt) {
   if (!boss || !boss.alive) return;
   boss.spawnT += dt;
   if (boss.spawnT < 0.4) return;
-  const dps = (14 + player.count * 4) * effectiveWeaponPower();
+  const rawDps = (14 + player.count * 4) * effectiveWeaponPower();
+  // Once the squad hits its 999 cap (a couple of acts in), raw dps would
+  // one-shot every later boss — capping it to a ~2.6s-minimum fight means
+  // the player actually gets to see each god's morphology/biome before it
+  // dies, instead of it vanishing the instant it spawns.
+  const dps = Math.min(rawDps, boss.maxHp / 2.6);
   boss.hp -= dps * dt;
   boss.shakeT += dt;
   els.bossHpBar.style.width = Math.max(0, (boss.hp / boss.maxHp) * 100) + '%';
@@ -1799,6 +2015,156 @@ function updateBoss(dt) {
       }
     }, 1400);
   }
+}
+
+// ---------- Boss weather: rain/snow/petals/ash tied to the active boss's
+// theme.weather, screen-space particles (not world-projected) so they read
+// as an atmosphere overlay rather than props in the 3D scene.
+const weatherParticles = [];
+let weatherSpawnTimer = 0;
+function updateWeather(dt) {
+  const type = boss && boss.alive && boss.theme.weather;
+  if (type) {
+    weatherSpawnTimer -= dt;
+    if (weatherSpawnTimer <= 0) {
+      weatherSpawnTimer = type === 'rain' ? 0.02 : 0.09;
+      const fall = type === 'rain' ? 480 + Math.random() * 140 : type === 'snow' ? 35 + Math.random() * 25 : type === 'ash' ? -(45 + Math.random() * 35) : 28 + Math.random() * 22;
+      weatherParticles.push({
+        type, x: Math.random() * W, y: type === 'ash' ? H * (0.5 + Math.random() * 0.5) : -10 - Math.random() * 30,
+        speed: fall, drift: (Math.random() - 0.5) * (type === 'rain' ? 20 : 36),
+        size: type === 'snow' ? 1.4 + Math.random() * 2 : type === 'petals' ? 3 + Math.random() * 3 : type === 'ash' ? 1.6 + Math.random() * 2.2 : 0,
+        len: type === 'rain' ? 13 + Math.random() * 9 : 0, phase: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+  for (let i = weatherParticles.length - 1; i >= 0; i--) {
+    const p = weatherParticles[i];
+    p.y += p.speed * dt;
+    p.x += (p.drift + Math.sin(atmosphereT * 2 + p.phase) * 8) * dt;
+    if (p.y > H + 20 || p.y < -60 || p.x < -40 || p.x > W + 40) weatherParticles.splice(i, 1);
+  }
+}
+function drawWeather() {
+  if (!weatherParticles.length) return;
+  ctx.save();
+  for (const p of weatherParticles) {
+    if (p.type === 'rain') {
+      ctx.strokeStyle = 'rgba(210,225,255,0.55)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+      ctx.lineTo(p.x - p.drift * 0.02, p.y + p.len);
+      ctx.stroke();
+    } else if (p.type === 'snow') {
+      ctx.fillStyle = 'rgba(255,255,255,0.85)';
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    } else if (p.type === 'petals') {
+      ctx.fillStyle = 'rgba(255,175,205,0.85)';
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, p.size, p.size * 0.6, atmosphereT + p.phase, 0, Math.PI * 2); ctx.fill();
+    } else if (p.type === 'ash') {
+      ctx.fillStyle = 'rgba(255,150,60,0.6)';
+      ctx.shadowColor = '#ff5a1a';
+      ctx.shadowBlur = 4;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+  ctx.restore();
+}
+
+// ---------- Poseidón's ship scene: swapped in for the mosaic floor + temple
+// scenery while biome === 'ocean' — a wooden deck, a mast/sail, animated
+// wave highlights, and a couple of sirens singing from the wreckage.
+function drawWaterWaves() {
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < 5; i++) {
+    const wy = HORIZON_Y + (H - HORIZON_Y) * (0.15 + i * 0.18);
+    ctx.beginPath();
+    for (let x = 0; x <= W; x += 20) {
+      const yy = wy + Math.sin(x * 0.05 + atmosphereT * 2 + i) * 3;
+      if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+function drawShipDeck() {
+  if (!boss) return;
+  const nearZ = Math.min(player.z + 3, boss.z + 18);
+  const farZ = boss.z - 3;
+  const hw = 6.2;
+  const nl = project(-hw, 0.02, nearZ), nr = project(hw, 0.02, nearZ);
+  const fl = project(-hw, 0.02, farZ), fr = project(hw, 0.02, farZ);
+  if (!nl.ok || !nr.ok || !fl.ok || !fr.ok) return;
+  ctx.save();
+  const grad = ctx.createLinearGradient(0, fl.sy, 0, nl.sy);
+  grad.addColorStop(0, '#6b4a2c');
+  grad.addColorStop(1, '#4a3018');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(nl.sx, nl.sy); ctx.lineTo(fl.sx, fl.sy); ctx.lineTo(fr.sx, fr.sy); ctx.lineTo(nr.sx, nr.sy);
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = 'rgba(40,24,10,0.35)';
+  ctx.lineWidth = 1;
+  for (let k = 1; k < 6; k++) {
+    const t = k / 6;
+    const a = project(-hw, 0.02, nearZ + (farZ - nearZ) * t);
+    const b = project(hw, 0.02, nearZ + (farZ - nearZ) * t);
+    if (a.ok && b.ok) { ctx.beginPath(); ctx.moveTo(a.sx, a.sy); ctx.lineTo(b.sx, b.sy); ctx.stroke(); }
+  }
+  ctx.restore();
+
+  const mastZ = farZ - 1;
+  const mastBase = project(0, 0.02, mastZ);
+  const mastTop = project(0, 9, mastZ);
+  if (mastBase.ok && mastTop.ok) {
+    ctx.save();
+    ctx.strokeStyle = '#3a2814';
+    ctx.lineWidth = Math.max(2, mastBase.scale * 0.05);
+    ctx.beginPath(); ctx.moveTo(mastBase.sx, mastBase.sy); ctx.lineTo(mastTop.sx, mastTop.sy); ctx.stroke();
+    const sailTop = project(0, 8.4, mastZ);
+    const sailBotFar = project(1.1, 4.2, mastZ);
+    const sailBotNear = project(0, 4.2, mastZ);
+    if (sailTop.ok && sailBotFar.ok && sailBotNear.ok) {
+      ctx.fillStyle = 'rgba(230,222,200,0.85)';
+      ctx.beginPath();
+      ctx.moveTo(sailTop.sx, sailTop.sy);
+      ctx.lineTo(sailBotFar.sx, sailBotFar.sy);
+      ctx.lineTo(sailBotNear.sx, sailBotNear.sy);
+      ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+  }
+}
+function buildSirenParts(seed) {
+  const S = 0.85;
+  const flick = Math.sin(atmosphereT * 2.4 + seed) * 0.35;
+  return [
+    { center: [0, 0.22 * S, 0], half: [0.22 * S, 0.22 * S, 0.5 * S], color: '#2f8a7a' },
+    { center: [0, 0.22 * S, -0.55 * S], half: [0.16 * S, 0.16 * S, 0.35 * S], color: '#256e60', rot: { axis: 'x', angle: flick, pivot: [0, 0.22 * S, -0.2 * S] } },
+    { center: [0, 0.22 * S, -1.0 * S], half: [0.32 * S, 0.05 * S, 0.16 * S], color: '#3fae9a', rot: { axis: 'x', angle: flick, pivot: [0, 0.22 * S, -0.2 * S] } },
+    { center: [0, 0.62 * S, 0.15 * S], half: [0.24 * S, 0.32 * S, 0.2 * S], color: '#e8b090' },
+    { center: [0, 0.95 * S, 0.05 * S], half: [0.2 * S, 0.22 * S, 0.22 * S], color: '#3a2a1e' },
+    { center: [0, 0.98 * S, 0.22 * S], half: [0.15 * S, 0.15 * S, 0.15 * S], color: '#e8b090' },
+  ];
+}
+function drawSirens() {
+  if (!boss) return;
+  const seeds = [11, 47];
+  [-1, 1].forEach((side, i) => {
+    const wx = side * 6.2;
+    const wz = boss.z + 3.5 + i * 1.5;
+    const proj = project(wx, 0, wz);
+    if (!proj.ok || proj.depth > FAR_CLIP || proj.depth < 0) return;
+    ctx.globalAlpha = fogFactor(proj.depth);
+    ctx.fillStyle = '#4a4a48';
+    ctx.beginPath(); ctx.ellipse(proj.sx, proj.sy, 0.5 * proj.scale, 0.22 * proj.scale, 0, 0, Math.PI * 2); ctx.fill();
+    drawActor3D({ x: wx, y: 0, z: wz }, buildSirenParts(seeds[i]), { outline: true });
+    ctx.globalAlpha = 1;
+  });
 }
 
 // ---------- Game state ----------
@@ -2105,6 +2471,7 @@ function animate(now) {
   updateParticles(dt);
   updateRunDust(dt);
   updateBirds(dt);
+  updateWeather(dt);
   updateCamera();
   screenShakeMag *= 0.88;
   flashAlpha = Math.max(0, flashAlpha - dt * 2.2);
@@ -2117,11 +2484,17 @@ function animate(now) {
   ctx.translate(shakeX, shakeY);
 
   drawBackground();
-  drawMosaicFloor();
-  drawLaneLines();
-
-  // static scenery: draw far-to-near (scenery sorted ascending by z already; z more negative = farther)
-  for (let i = 0; i < scenery.length; i++) drawSceneryPiece(scenery[i]);
+  const onShip = state.mode === 'boss' && boss && boss.theme.biome === 'ocean';
+  if (onShip) {
+    drawWaterWaves();
+    drawShipDeck();
+    drawSirens();
+  } else {
+    drawMosaicFloor();
+    drawLaneLines();
+    // static scenery: draw far-to-near (scenery sorted ascending by z already; z more negative = farther)
+    for (let i = 0; i < scenery.length; i++) drawSceneryPiece(scenery[i]);
+  }
 
   drawDynamicWorld();
   if (state.mode === 'boss' || (boss && boss.alive)) drawBoss();
@@ -2136,6 +2509,7 @@ function animate(now) {
   ctx.restore();
 
   drawVignette(dayT);
+  drawWeather();
   if (flashAlpha > 0.005) {
     ctx.save();
     ctx.globalAlpha = flashAlpha;

@@ -1667,26 +1667,60 @@ function buildBoss(checkpoint) {
 // not flat sprites) for the given animation time. `theme.scale` uniformly
 // scales every dimension so each boss theme reads as a different-sized
 // creature.
+// A coiling tail (serpent or fish) in place of legs: thin at the ground,
+// thick near the torso, swaying independently of any stride, capped with a
+// flared fin. Shared by Medusa (gorgon) and Poseidón (seagod).
+function pushTailParts(parts, S, legTop, shakeT, colorA, colorB, finColor) {
+  const segCount = 4;
+  const segFullH = legTop / segCount;
+  for (let i = 0; i < segCount; i++) {
+    const t = i / (segCount - 1);
+    const segHalfH = segFullH / 2;
+    const segY = segFullH * i + segHalfH;
+    const width = (0.16 + t * 0.2) * S;
+    const depth = (0.14 + t * 0.16) * S;
+    const sway = Math.sin(shakeT * 2.2 + i * 0.9) * 0.16 * S * (1 - t * 0.5);
+    parts.push({ center: [sway, segY, 0], half: [width, segHalfH, depth], color: i % 2 === 0 ? colorA : colorB });
+  }
+  parts.push({
+    center: [0, 0.06 * S, 0.06 * S], half: [0.34 * S, 0.05 * S, 0.24 * S], color: finColor,
+    rot: { axis: 'x', angle: 0.35, pivot: [0, 0.06 * S, 0] },
+  });
+}
+// A flared, tapered silhouette (gown, robe...) in place of legs: 3 stacked
+// boxes widening from the hip down to the ground, alternating shades so the
+// segments read as fabric folds rather than one flat slab.
+function pushFlaredSkirtParts(parts, S, legTop, topWidth, topDepth, bottomWidth, bottomDepth, colorA, colorB) {
+  const segs = 3;
+  const segFullH = legTop / segs;
+  for (let i = 0; i < segs; i++) {
+    const t = i / (segs - 1);
+    const segHalfH = segFullH / 2;
+    const segY = legTop - segFullH * i - segHalfH;
+    const width = topWidth + (bottomWidth - topWidth) * t;
+    const depth = topDepth + (bottomDepth - topDepth) * t;
+    parts.push({ center: [0, segY, 0], half: [width, segHalfH, depth], color: i % 2 === 0 ? colorA : colorB });
+  }
+}
+
 function buildBossParts(theme, shakeT, hpFrac) {
   const S = theme.scale;
   const morph = theme.morph || 'warrior';
   const parts = [];
   const legTop = 1.5 * S;
 
+  // Lower body: most gods keep armored legs, but several morphs replace them
+  // entirely — a coiling tail for the gorgon and the sea god, a flared gown
+  // for the goddess, a heavy robe for the titan — for a silhouette that
+  // reads as a different kind of body, not just a recolored soldier.
   if (morph === 'gorgon') {
-    // Medusa: a coiling serpent tail instead of legs, tapering thin at the
-    // ground and thick near the torso, swaying independently of any stride.
-    const segCount = 4;
-    const segFullH = legTop / segCount;
-    for (let i = 0; i < segCount; i++) {
-      const t = i / (segCount - 1);
-      const segHalfH = segFullH / 2;
-      const segY = segFullH * i + segHalfH;
-      const width = (0.16 + t * 0.2) * S;
-      const depth = (0.14 + t * 0.16) * S;
-      const sway = Math.sin(shakeT * 2.2 + i * 0.9) * 0.16 * S * (1 - t * 0.5);
-      parts.push({ center: [sway, segY, 0], half: [width, segHalfH, depth], color: i % 2 === 0 ? theme.body : theme.bodyDark });
-    }
+    pushTailParts(parts, S, legTop, shakeT, theme.body, theme.bodyDark, '#3f5c2a');
+  } else if (morph === 'seagod') {
+    pushTailParts(parts, S, legTop, shakeT, theme.body, theme.bodyDark, theme.crest);
+  } else if (morph === 'goddess') {
+    pushFlaredSkirtParts(parts, S, legTop, 0.42 * S, 0.34 * S, 0.72 * S, 0.56 * S, theme.body, theme.crest);
+  } else if (morph === 'titan') {
+    pushFlaredSkirtParts(parts, S, legTop, 0.4 * S, 0.34 * S, 0.76 * S, 0.62 * S, theme.bodyDark, theme.body);
   } else {
     const legHalf = [0.22 * S, 0.75 * S, 0.24 * S];
     const legY = 0.75 * S;
@@ -1695,11 +1729,12 @@ function buildBossParts(theme, shakeT, hpFrac) {
   }
 
   let torsoHalf = [1.05 * S, 0.85 * S, 0.55 * S];
-  if (morph === 'goddess') torsoHalf = [0.85 * S, 0.8 * S, 0.48 * S];
+  if (morph === 'goddess' || morph === 'gorgon') torsoHalf = [0.85 * S, 0.8 * S, 0.48 * S];
   else if (morph === 'hero' || morph === 'enforcer') torsoHalf = [1.22 * S, 0.88 * S, 0.6 * S];
   else if (morph === 'king') torsoHalf = [1.15 * S, 0.9 * S, 0.58 * S];
   const torsoCenterY = legTop + torsoHalf[1];
   const torsoTop = torsoCenterY + torsoHalf[1];
+  const feminine = morph === 'goddess' || morph === 'gorgon';
 
   // Shield arm + shield (left / -X side)
   const shoulderL = [-1.15 * S, torsoCenterY + 0.3 * S, 0.1 * S];
@@ -1773,8 +1808,27 @@ function buildBossParts(theme, shakeT, hpFrac) {
     weaponFireAt = { local: [tip[0], tip[1] - 1.05 * S, tip[2]], rot: armRot };
   }
 
-  // Torso
-  parts.push({ center: [0, torsoCenterY, 0], half: torsoHalf, color: theme.body });
+  // Torso: an hourglass of 3 stacked boxes (hip / waist / bust) for a
+  // visibly feminine silhouette on Medusa and Afrodita — narrow waist,
+  // flared hips, no single flat slab — everyone else keeps one solid torso.
+  if (feminine) {
+    const hipHalf = [torsoHalf[0] * 1.08, torsoHalf[1] * 0.42, torsoHalf[2] * 1.08];
+    const waistHalf = [torsoHalf[0] * 0.6, torsoHalf[1] * 0.26, torsoHalf[2] * 0.72];
+    const bustHalf = [torsoHalf[0] * 0.88, torsoHalf[1] * 0.32, torsoHalf[2] * 0.92];
+    const hipY = torsoCenterY - torsoHalf[1] + hipHalf[1];
+    const waistY = hipY + hipHalf[1] + waistHalf[1];
+    const bustY = waistY + waistHalf[1] + bustHalf[1];
+    parts.push({ center: [0, hipY, 0], half: hipHalf, color: theme.body });
+    parts.push({ center: [0, waistY, 0], half: waistHalf, color: theme.bodyDark });
+    parts.push({ center: [0, bustY, 0], half: bustHalf, color: theme.body });
+  } else {
+    parts.push({ center: [0, torsoCenterY, 0], half: torsoHalf, color: theme.body });
+    if (morph === 'hero' || morph === 'enforcer') {
+      // exaggerated deltoids/biceps bulking out the silhouette
+      parts.push({ center: [shoulderL[0] + 0.1 * S, shoulderL[1] + 0.08 * S, shoulderL[2]], half: [0.28 * S, 0.24 * S, 0.28 * S], color: theme.body });
+      parts.push({ center: [shoulderR[0] - 0.1 * S, shoulderR[1] + 0.08 * S, shoulderR[2]], half: [0.28 * S, 0.24 * S, 0.28 * S], color: theme.body });
+    }
+  }
 
   // Head, with per-morph decorations replacing the default Corinthian
   // helmet crest — snake hair, a titan's hood, a goddess's flowing locks,

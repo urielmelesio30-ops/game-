@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Voz (Kokoro TTS, local) y música/efectos originales generados por código.
 
-La voz es una mezcla de dos voces de Kokoro (femenina con un punto cálido, fonética de
+La voz es de Kokoro, admite mezclas de voces (femenina, fonética de
 España: el TTS usa espeak "es", castellano) y se
 procesa en ffmpeg (CADENA_VOZ) con más presencia y compresión, al estilo de Reels/TikTok."""
 import hashlib, os, re
@@ -13,7 +13,7 @@ VOZ_SR = 24000
 MUS_SR = 48000
 MODELO = os.environ.get("KOKORO_MODEL", "/opt/tts/kokoro-v1.0.onnx")
 VOCES = os.environ.get("KOKORO_VOICES", "/opt/tts/voices-v1.0.bin")
-VOZ = os.environ.get("VOZ", "ef_dora:0.75+em_alex:0.25")  # mezcla de voces de Kokoro
+VOZ = os.environ.get("VOZ", "ef_dora")  # mezcla de voces de Kokoro
 VELOCIDAD = float(os.environ.get("VELOCIDAD", "1.05"))
 CADENA_VOZ = os.environ.get("CADENA_VOZ", (
     "highpass=f=75,equalizer=f=200:t=q:w=1:g=1.5,equalizer=f=450:t=q:w=1.4:g=-2,"

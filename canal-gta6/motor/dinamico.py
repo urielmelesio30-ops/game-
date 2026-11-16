@@ -388,18 +388,26 @@ def render(v):
     audio.sf.write(wav_voz, pista, audio.VOZ_SR)
     # ---- música + efectos por beat
     mus = audio.chiptune(total + 1, semilla=7, bpm=132, tono="D")
-    impacto = {"rayo", "explosion", "mascara", "versus", "dios", "comic"}
+    # efectos solo en los momentos importantes, cada uno con su sonido
+    EFECTOS = {
+        "rayo": [(0.25, "zap")],
+        "explosion": [(0.4, "boom")],
+        "mascara": [(0.36, "golpe")],
+        "versus": [(0.35, "golpe")],
+        "cambio": [(None, "subida"), (None, "boom")],
+        "dios": [(0.45, "logro")],
+        "fecha": [(0.9, "logro")],
+    }
     for b in beats:
-        for t_ef, k in [(b["t0"], 1), (b["t0"] + 0.1, 2 if b["a"] in impacto else 0)]:
-            s = audio.blip(k)
-            i = int(t_ef * audio.MUS_SR)
-            j = min(len(mus), i + len(s))
-            mus[i:j] += s[: j - i] * 2.0
-        if b["a"] == "desfile":
-            for k_ in range(len(b["heroes"])):
-                s = audio.blip(0)
-                i = int((b["t0"] + k_ * (b["dur"] - 0.3) / len(b["heroes"])) * audio.MUS_SR)
-                mus[i:i + len(s)] += s[: max(0, min(len(s), len(mus) - i))] * 2.0
+        for off, nombre in EFECTOS.get(b["a"], []):
+            if off is None:   # la transformación ocurre a mitad del beat
+                mitad = b["dur"] * 0.45
+                off = mitad - 0.5 if nombre == "subida" else mitad
+            s_ = audio.efecto(nombre)
+            i = int((b["t0"] + off) * audio.MUS_SR)
+            j = min(len(mus), i + len(s_))
+            if 0 <= i < len(mus):
+                mus[i:j] += s_[: j - i] * 2.0
     wav_mus = os.path.join(base, f"musica{suf}.wav")
     audio.sf.write(wav_mus, mus, audio.MUS_SR)
     with open(os.path.join(base, f"{slug}.es.srt"), "w", encoding="utf-8") as fs:

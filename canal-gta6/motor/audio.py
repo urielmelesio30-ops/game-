@@ -335,3 +335,42 @@ def blip(tipo=0):
         f = np.where(np.arange(n) < int(0.06 * sr), 988, 1976)
         s = np.where((np.cumsum(f) / sr) % 1.0 < 0.5, 1.0, -1.0) * np.exp(-np.arange(n) / sr * 9) * 0.2
     return np.stack([s, s], 1).astype(np.float32)
+
+
+def efecto(nombre):
+    """Efectos 8-bit variados para los momentos importantes."""
+    sr = MUS_SR
+    rng = np.random.default_rng(len(nombre))
+    if nombre == "zap":            # láser: barrido descendente de pulso
+        n = int(0.32 * sr)
+        f = np.linspace(1800, 220, n)
+        s = np.where((np.cumsum(f) / sr) % 1.0 < 0.3, 1.0, -1.0) * np.linspace(1, 0, n) ** 0.7 * 0.22
+    elif nombre == "boom":         # explosión: ruido grave que se apaga
+        n = int(0.9 * sr)
+        per = np.linspace(6, 40, n).astype(int)
+        r = rng.choice([-1.0, 1.0], size=n)
+        ruido = np.array([r[i - i % p] for i, p in enumerate(per)])
+        t = np.arange(n) / sr
+        grave = np.sin(2 * np.pi * (60 * t + 40 * (1 - np.exp(-t * 8)) / 8))
+        s = (ruido * 0.6 + grave * 0.6) * np.exp(-t * 4.5) * 0.4
+    elif nombre == "golpe":        # golpe seco
+        n = int(0.22 * sr)
+        t = np.arange(n) / sr
+        f = 220 * np.exp(-t * 25) + 50
+        tono = np.round(np.sin(2 * np.pi * np.cumsum(f) / sr) * 4) / 4
+        s = (tono * 0.7 + rng.choice([-1.0, 1.0], size=n) * 0.3) * np.exp(-t * 18) * 0.45
+    elif nombre == "logro":        # campanilla: arpegio ascendente
+        notas = [988, 1319, 1568, 1976]
+        partes = []
+        for k, fz in enumerate(notas):
+            n = int(0.08 * sr) if k < 3 else int(0.3 * sr)
+            t = np.arange(n) / sr
+            partes.append(np.where((t * fz) % 1.0 < 0.5, 1.0, -1.0) * np.exp(-t * (6 if k == 3 else 20)) * 0.16)
+        s = np.concatenate(partes)
+    elif nombre == "subida":       # carga de energía que sube
+        n = int(0.55 * sr)
+        f = np.geomspace(150, 1600, n)
+        s = np.where((np.cumsum(f) / sr) % 1.0 < 0.25, 1.0, -1.0) * np.linspace(0.2, 1, n) * 0.14
+    else:
+        return blip(0)
+    return np.stack([s, s], 1).astype(np.float32)

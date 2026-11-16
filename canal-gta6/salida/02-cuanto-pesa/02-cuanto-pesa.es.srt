@@ -1,88 +1,88 @@
 1
-00:00:00,150 --> 00:00:05,833
+00:00:00,150 --> 00:00:05,790
 ¿Cuánto pesa GTA 6? Esta es la pregunta que más se repite estos días, y la respuesta asusta un poco.
 
 2
-00:00:06,113 --> 00:00:11,946
+00:00:06,070 --> 00:00:11,882
 Te doy la cifra oficial, por qué cambia según la consola y cómo liberar espacio sin perder tus partidas.
 
 3
-00:00:12,896 --> 00:00:18,537
+00:00:12,832 --> 00:00:18,473
 La cifra que da Rockstar es esta: hasta 212 gigas de espacio libre, según tu dispositivo.
 
 4
-00:00:18,817 --> 00:00:24,884
+00:00:18,753 --> 00:00:24,820
 Sony lo dice todavía más claro en su blog: deja como mínimo 212 gigas libres en tu PS5.
 
 5
-00:00:25,834 --> 00:00:31,880
+00:00:25,770 --> 00:00:31,710
 En las pantallas de precarga que se han compartido, la descarga ronda los 210 gigas en PS5.
 
 6
-00:00:32,160 --> 00:00:38,441
+00:00:31,990 --> 00:00:38,206
 En Xbox se han visto cifras parecidas, pero hay reportes que no coinciden, así que tómalo como aproximado.
 
 7
-00:00:38,721 --> 00:00:44,980
+00:00:38,486 --> 00:00:44,724
 Lo importante no es la cifra exacta de descarga, sino el espacio libre que pide la consola: 212 gigas.
 
 8
-00:00:45,930 --> 00:00:51,315
+00:00:45,674 --> 00:00:51,038
 Y aquí viene el problema. El disco de una consola nunca te deja usar todo lo que pone en la caja.
 
 9
-00:00:51,595 --> 00:00:58,068
+00:00:51,318 --> 00:00:57,748
 Una PS5 original tiene unos 667 gigas útiles: GTA 6 se come casi un tercio.
 
 10
-00:00:58,348 --> 00:01:05,888
+00:00:58,028 --> 00:01:05,525
 La PS5 Slim de un terabyte ronda los 848 gigas útiles. La Pro, con dos terabytes, va mucho más holgada.
 
 11
-00:01:06,168 --> 00:01:14,987
+00:01:05,805 --> 00:01:14,603
 Y la Xbox Series S de 512 gigas, con unos 364 gigas útiles, se queda con más de la mitad ocupada solo por GTA 6.
 
 12
-00:01:15,937 --> 00:01:18,677
+00:01:15,553 --> 00:01:18,293
 Así que toca hacer limpieza. Hazlo en este orden.
 
 13
-00:01:18,957 --> 00:01:28,438
+00:01:18,573 --> 00:01:28,096
 Primero, en el menú de almacenamiento ordena los juegos por tamaño y quita lo que no tocas desde hace meses. Tus partidas guardadas se quedan en la consola o en la nube.
 
 14
-00:01:28,718 --> 00:01:34,486
+00:01:28,376 --> 00:01:34,145
 Segundo, borra capturas y vídeos. Los clips en alta resolución ocupan muchísimo sin que te des cuenta.
 
 15
-00:01:34,766 --> 00:01:41,900
+00:01:34,425 --> 00:01:41,516
 Tercero, mueve los juegos de la generación anterior a un disco duro USB: se pueden jugar desde ahí y no gastan el disco interno.
 
 16
-00:01:42,180 --> 00:01:49,016
+00:01:41,796 --> 00:01:48,631
 Y cuarto, en juegos que lo permiten, desinstala los modos que no usas, como la campaña o el multijugador de algunos shooters.
 
 17
-00:01:49,966 --> 00:01:52,602
+00:01:49,581 --> 00:01:52,218
 Si prefieres ampliar en lugar de borrar, apunta.
 
 18
-00:01:52,882 --> 00:02:01,573
+00:01:52,498 --> 00:02:01,210
 En PS5 puedes instalar un SSD M punto 2, PCIe 4.0, con disipador. Es fácil y se ve en un tutorial de cinco minutos.
 
 19
-00:02:01,853 --> 00:02:07,451
+00:02:01,490 --> 00:02:07,067
 En Xbox Series necesitas una tarjeta de expansión compatible, de las que se enchufan por detrás.
 
 20
-00:02:07,731 --> 00:02:16,913
+00:02:07,347 --> 00:02:16,550
 Y ojo: un disco USB normal sirve para guardar juegos de nueva generación, pero no para jugarlos. GTA 6 tiene que ir en el disco interno o en la ampliación.
 
 21
-00:02:17,863 --> 00:02:22,693
+00:02:17,500 --> 00:02:22,330
 Con esto ya no te pillan los 212 gigas. Guárdalo para cuando hagas limpieza.
 
 22
-00:02:22,973 --> 00:02:27,206
+00:02:22,610 --> 00:02:26,800
 Sígueme para más guías de GTA 6. La próxima: Estándar o Ultimate.
 

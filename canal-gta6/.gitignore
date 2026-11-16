@@ -1,0 +1,5 @@
+salida/**/*.mp4
+salida/**/*_preview*
+salida/**/*.wav
+.cache_voz/
+__pycache__/

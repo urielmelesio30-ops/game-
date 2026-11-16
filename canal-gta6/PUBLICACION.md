@@ -12,7 +12,8 @@ personajes. Los vídeos se publican en ese orden.
 3. **Activa "Contenido generado por IA"** en *Más opciones*: la voz es sintética (TTS). TikTok pide etiquetarlo y así evitas que te limiten el alcance.
 4. Los subtítulos ya van quemados en el vídeo. No actives los subtítulos automáticos de TikTok (saldrían dos veces).
 5. Nombre y bio sugeridos: **ZONA 6 · Todo GTA 6, sin humo** — *Guías y noticias de GTA 6 verificadas. Canal de fans, sin relación con Rockstar Games.*
-6. No uses el logo de GTA 6 ni capturas/tráileres de Rockstar en perfil ni portadas: los vídeos están hechos con gráficos y música propios para no tener problemas de derechos.
+6. Mantén la estética pixel art también en la foto de perfil (por ejemplo, una captura de una portada) para que el perfil se vea uniforme.
+7. No uses el logo de GTA 6 ni capturas/tráileres de Rockstar en perfil ni portadas: los vídeos están hechos con pixel art y música chiptune propios para no tener problemas de derechos.
 
 ## Horario (hora peninsular de España; Latinoamérica va 4–7 h por detrás)
 

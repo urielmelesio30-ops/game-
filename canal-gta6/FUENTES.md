@@ -19,3 +19,16 @@ Lo que no está confirmado se dice como tal en el guion.
 | Fechas históricas (GTA 1997 … GTA V 17-sep-2013, GTA Online 1-oct-2013, GTA V PC abr-2015, RDR2 oct-2018 / PC nov-2019) | Hechos conocidos | — |
 
 **Sin datos de Google Trends:** la red de este entorno bloquea trends.google.com, así que los temas se eligieron por las preguntas que más se repiten en la cobertura de esta semana (hora, espacio, ediciones, PC, online, estafas, mapa, personajes, consejos). Si tienes acceso a Trends o a TikTok Creative Center, revisa el orden de publicación con esos datos.
+
+## Vídeo 11 · Víctor von Doom / Vengadores: Doomsday (consultado el 16-nov-2026)
+
+| Dato | Estado | Fuentes |
+|---|---|---|
+| Estreno 18-dic-2026 (algunas fichas de España: 17-dic) | Confirmado / varía por país | [Rotten Tomatoes](https://editorial.rottentomatoes.com/article/everything-we-know-about-avengers-doomsday/), [SensaCine](https://www.sensacine.com/peliculas/pelicula-269068/), [Marvel.com](https://www.marvel.com/articles/movies/avengers-doomsday-everything-to-know) |
+| Robert Downey Jr. es Doom; dirigen los hermanos Russo | Confirmado | [Deadline](https://deadline.com/2026/07/avengers-doomsday-trailer-mcu-doctor-doom-1236998304/), [Variety](https://variety.com/2026/film/news/avengers-doomsday-trailer-d23-1236817670/) |
+| Avances de dic-2025 (vuelve Steve Rogers, Thor reza a Odín), tráiler completo jul-2026, tráiler de D23 (Doom frena a Thor) | Confirmado | [Marvel.com](https://www.marvel.com/articles/movies/avengers-doomsday-teaser-trailer), [Deadline](https://deadline.com/2025/12/avengers-doomsday-trailer-thor-teaser-chris-hemsworth-1236658673/), [Variety](https://variety.com/2026/film/news/avengers-doomsday-trailer-d23-1236817670/) |
+| Reparto (Hemsworth, Evans, Pascal, Stewart, McKellen, Wright, Hiddleston…) | Confirmado | [The Walt Disney Company](https://thewaltdisneycompany.com/news/marvel-studios-avengers-doomsday-cast/), [Deadline](https://deadline.com/gallery/avengers-doomsday-cast-photos-marvel/) |
+| Tráiler final quizá el 18-nov | Rumor/reporte (el guion lo dice así) | [Bamsmackpow](https://bamsmackpow.com/marvel-studios-final-avengers-doomsday-trailer-release-date-report) |
+| Secret Wars: diciembre de 2027 | Fecha más citada (17-dic-2027) | [GamesRadar](https://gamesradar.com/avengers-secret-wars-release-date-cast-trailer), [Soapcentral](https://bravo-www.soapcentral.com/entertainment/news-marvel-pushes-avengers-doomsday-secret-wars-release-dates-december-2026-2027) |
+| Doom: Stan Lee y Jack Kirby, *Fantastic Four* #5 (1962), Latveria; origen ampliado en *Fantastic Four Annual* #2 | Confirmado | [Wikipedia](https://en.wikipedia.org/wiki/Doctor_Doom), [Key Collector](https://keycollectorcomics.com/character/dr-doom,7109) |
+| Rivalidad con Reed, accidente y máscara; *Secret Wars* (1984) y dios emperador en *Secret Wars* (2015) | Historia conocida de los cómics | — |

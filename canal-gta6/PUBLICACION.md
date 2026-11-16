@@ -84,3 +84,17 @@ La historia de GTA en 2 minutos: de 1997 a GTA 6 🕹️ ¿Cuál es tu favorito?
 - **Fija un comentario** en el 01: "¿En qué país estás y a qué hora te desbloqueó? 👇" Así cualquier diferencia de horario la corrige la propia comunidad.
 - **Monetización:** el Programa de Recompensas para Creadores de TikTok solo paga vídeos de más de 1 minuto; todos estos duran más de 1 minuto.
 - **Actualiza rápido:** si Rockstar anuncia PC u online, el vídeo 04 o el 08 se regeneran cambiando el texto en `motor/guiones.py` y ejecutando `python3 motor/render.py 04`.
+
+---
+
+## Extra · Vídeo 11: ¿Quién es Víctor von Doom? (Vengadores: Doomsday)
+
+`salida/11-doomsday-victor-von-doom/11-doomsday-victor-von-doom.mp4` · portada: `salida/11-doomsday-victor-von-doom/portada.png`
+
+**Cuándo:** cuanto antes. Varios medios dicen que el tráiler final de *Vengadores: Doomsday* podría salir el miércoles 18 de noviembre; publicarlo antes o ese mismo día aprovecha el pico de búsquedas. La película se estrena el 18 de diciembre de 2026 (en algunos países, el 17).
+
+**Texto:**
+Robert Downey Jr. vuelve a Marvel… como el villano 😈 ¿Quién es Víctor von Doom (el Doctor Muerte) y por qué importa tanto en Vengadores: Doomsday? Te lo explico en pixel art 👾
+`#VengadoresDoomsday #DoctorDoom #Marvel #RobertDowneyJr #pixelart`
+
+Activa también "Contenido generado por IA" (voz sintética). Los personajes son sprites pixel art propios, sin imágenes ni logos de Marvel.

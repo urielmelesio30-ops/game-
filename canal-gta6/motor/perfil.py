@@ -43,16 +43,8 @@ def contorno(img, color=(12, 8, 22)):
     return out
 
 
-def perfil(cielo, cuerpo, pantalla, cara, nombre):
-    fondo = Image.fromarray(dither_vertical(N, N, cielo)).convert("RGBA")
-    d = ImageDraw.Draw(fondo)
-    rng = np.random.default_rng(3)
-    for _ in range(26):
-        x, y = rng.integers(4, N - 4, 2)
-        d.point((int(x), int(y)), fill=col("crema"))
-    # suelo/sombra
-    d.ellipse((30, 86, 78, 94), fill=col("negro") + (255,))
-
+def mascota_capa(cuerpo, pantalla, cara, boca_abierta=False):
+    """Capa RGBA 108x108 solo con la mascota (sin fondo). Se usa en el perfil y en los vídeos."""
     capa = Image.new("RGBA", (N, N), (0, 0, 0, 0))
     c = ImageDraw.Draw(capa)
     # antenas
@@ -79,9 +71,14 @@ def perfil(cielo, cuerpo, pantalla, cara, nombre):
         for dx, dy in ojo:
             c.rectangle((ox + dx, 44 + dy, ox + dx, 45 + dy), fill=col(cara))
     sonrisa = [(0, 0), (1, 1), (2, 2), (3, 2), (4, 3), (5, 3), (6, 3), (7, 3), (8, 3), (9, 3), (10, 3), (11, 2), (12, 2), (13, 1), (14, 0)]
-    for dx, dy in sonrisa:
-        c.rectangle((43 + dx, 56 + dy, 43 + dx, 57 + dy), fill=col(cara))
-    c.rectangle((47, 60, 53, 62), fill=col("rosa"))           # lengua
+    if boca_abierta:
+        c.rectangle((44, 55, 56, 63), fill=col(cara))
+        c.rectangle((46, 57, 54, 62), fill=col("negro"))
+        c.rectangle((47, 60, 53, 62), fill=col("rosa"))
+    else:
+        for dx, dy in sonrisa:
+            c.rectangle((43 + dx, 56 + dy, 43 + dx, 57 + dy), fill=col(cara))
+        c.rectangle((47, 60, 53, 62), fill=col("rosa"))           # lengua
     c.rectangle((33, 54, 37, 56), fill=col("rosa"))
     c.rectangle((63, 54, 67, 56), fill=col("rosa"))
     # mandos laterales de la tele
@@ -90,6 +87,20 @@ def perfil(cielo, cuerpo, pantalla, cara, nombre):
     for y in (61, 64, 67):
         c.line([(73, y), (79, y)], fill=col(cuerpo[1]))
     capa = contorno(capa)
+    return capa
+
+
+def perfil(cielo, cuerpo, pantalla, cara, nombre):
+    fondo = Image.fromarray(dither_vertical(N, N, cielo)).convert("RGBA")
+    d = ImageDraw.Draw(fondo)
+    rng = np.random.default_rng(3)
+    for _ in range(26):
+        x, y = rng.integers(4, N - 4, 2)
+        d.point((int(x), int(y)), fill=col("crema"))
+    # suelo/sombra
+    d.ellipse((30, 86, 78, 94), fill=col("negro") + (255,))
+
+    capa = mascota_capa(cuerpo, pantalla, cara)
     fondo.alpha_composite(capa)
 
     # iconos alrededor (dentro del círculo)

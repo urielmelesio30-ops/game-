@@ -532,7 +532,7 @@ def construir_escena(esc, tema_nombre, tiempos, dur):
     elif tipo == "cta":
         dyn.append(("cta", dict(a=A, b=B)))
         f = fuente("texto", 20)
-        for j, ln in enumerate(envolver(f"{CANAL} · {LEMA}", f, ANCHO)):
+        for j, ln in enumerate(envolver(f"{CANAL} · {LEMA}" if CANAL else LEMA, f, ANCHO)):
             im = txt_img(ln, f, B)
             sp.append(Sprite(im, centrar(im), 168 + j * 20, 0.4, anim="arriba"))
         for i, et in enumerate(["GUARDA", "COMENTA", "COMPARTE"]):
@@ -683,6 +683,7 @@ def construir_subtitulos(subt):
 
 # ------------------------------------------------------------- montaje
 GAP, ENTRADA, COLA = 0.28, 0.4, 0.55
+ENCIMA = {"maquina"}  # elementos dinámicos que se dibujan después de las cajas
 
 
 def linea_temporal(v):
@@ -779,10 +780,10 @@ def render_video(v, idx):
         frame = fondo.frame(t, off).convert("RGBA")
         frame.alpha_composite(velo)
         d = ImageDraw.Draw(frame)
-        pintar_dinamico(frame, d, [x for x in dyn if x[0] != "maquina"], tl, tema_n)
+        pintar_dinamico(frame, d, [x for x in dyn if x[0] not in ENCIMA], tl, tema_n)
         for s_ in sp:
             s_.pintar(frame, tl, e["dur"])
-        pintar_dinamico(frame, d, [x for x in dyn if x[0] == "maquina"], tl, tema_n)  # texto encima de su caja
+        pintar_dinamico(frame, d, [x for x in dyn if x[0] in ENCIMA], tl, tema_n)  # lo que va encima de sus cajas
         while k_sub + 1 < len(subs) and t >= subs[k_sub + 1][0]:
             k_sub += 1
         s0, s1, simg = subs[k_sub]

@@ -173,11 +173,11 @@ dict(
 dict(
  slug="05-estafas",
  tema="rojo", fondo="noche",
- titulo="CUIDADO: «GTA 6 gratis para PC y celular» es una ESTAFA (así te roban la cuenta)",
+ titulo="CUIDADO: «GTA 6 gratis para PC y móvil» es una ESTAFA (así te roban la cuenta)",
  miniatura=("¡CUIDADO!", "ES ESTAFA", "APK / PC"),
  escenas=[
   dict(t="title", chapter="Intro", head="GTA 6 GRATIS = ESTAFA", sub="Cómo funcionan y cómo protegerte",
-       say=["GTA 6 gratis para PC. GTA 6 para celular. Beta exclusiva. Si has visto algo así, para.",
+       say=["GTA 6 gratis para PC. GTA 6 para el móvil. Beta exclusiva. Si has visto algo así, para.",
             "Te explico cómo funcionan estas estafas y qué hacer si ya has caído."]),
   dict(t="card", chapter="Lo básico", head="LO BÁSICO", text="No existe GTA 6 para PC ni móvil",
        say=["Lo básico: GTA 6 sale para PlayStation 5 y Xbox Series. No existe versión de PC ni de móvil.",

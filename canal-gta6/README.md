@@ -24,7 +24,7 @@ python3 render.py 04 08          # solo algunos
 python3 miniaturas.py            # portadas
 ```
 
-Voz por defecto: `ef_dora` (femenina, amable). Masculina: `VOZ=em_alex python3 render.py` · velocidad: `VELOCIDAD=1.05`.
+Voz por defecto: mezcla `ef_dora:0.75+em_alex:0.25` a velocidad 1.05 (femenina, cálida, pronunciación de España). Otras: `VOZ=ef_dora` o `VOZ=em_alex python3 render.py` · velocidad: `VELOCIDAD=1.1`.
 El tratamiento de la voz (tono, ecualización, compresión) está en `CADENA_VOZ` de `motor/audio.py`.
 
 ## Derechos

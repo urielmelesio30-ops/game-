@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """Voz (Kokoro TTS, local) y música/efectos originales generados por código.
 
-La voz se procesa después en ffmpeg (CADENA_VOZ): tono un pelín más alto y
-amable, agudos suavizados y compresión ligera (estilo narración de TikTok)."""
+La voz es una mezcla de dos voces de Kokoro (femenina con un punto cálido, fonética de
+España: el TTS usa espeak "es", castellano) y se
+procesa en ffmpeg (CADENA_VOZ) con más presencia y compresión, al estilo de Reels/TikTok."""
 import hashlib, os, re
 import numpy as np
 import soundfile as sf
@@ -12,12 +13,12 @@ VOZ_SR = 24000
 MUS_SR = 48000
 MODELO = os.environ.get("KOKORO_MODEL", "/opt/tts/kokoro-v1.0.onnx")
 VOCES = os.environ.get("KOKORO_VOICES", "/opt/tts/voices-v1.0.bin")
-VOZ = os.environ.get("VOZ", "ef_dora")
-VELOCIDAD = float(os.environ.get("VELOCIDAD", "1.0"))
+VOZ = os.environ.get("VOZ", "ef_dora:0.75+em_alex:0.25")  # mezcla de voces de Kokoro
+VELOCIDAD = float(os.environ.get("VELOCIDAD", "1.05"))
 CADENA_VOZ = os.environ.get("CADENA_VOZ", (
-    "rubberband=pitch=1.03:formant=preserved,highpass=f=80,equalizer=f=250:t=q:w=1:g=1.5,"
-    "equalizer=f=2500:t=q:w=1.2:g=1.5,highshelf=f=7000:g=-3,"
-    "acompressor=threshold=0.1:ratio=2.5:attack=10:release=180:makeup=1.5"))
+    "highpass=f=75,equalizer=f=200:t=q:w=1:g=1.5,equalizer=f=450:t=q:w=1.4:g=-2,"
+    "equalizer=f=4000:t=q:w=1.2:g=3.5,highshelf=f=9000:g=1,"
+    "acompressor=threshold=0.06:ratio=4:attack=4:release=90:makeup=2.5"))
 CACHE = os.path.join(os.path.dirname(__file__), "..", ".cache_voz")
 
 # Pronunciación: el TTS lee con fonética española, así que los nombres en
@@ -60,6 +61,18 @@ def pronunciar(texto):
 _kokoro = None
 
 
+def estilo_voz():
+    """VOZ puede ser un nombre ("em_alex") o una mezcla ("em_alex:0.6+em_santa:0.4")."""
+    if "+" not in VOZ and ":" not in VOZ:
+        return VOZ
+    total = None
+    for parte in VOZ.split("+"):
+        nombre, peso = (parte.split(":") + ["1"])[:2]
+        v = _kokoro.get_voice_style(nombre.strip()) * float(peso)
+        total = v if total is None else total + v
+    return total
+
+
 def voz(texto):
     """Devuelve audio float32 mono a 24 kHz. Cachea por texto+voz."""
     global _kokoro
@@ -73,7 +86,7 @@ def voz(texto):
     if _kokoro is None:
         from kokoro_onnx import Kokoro
         _kokoro = Kokoro(MODELO, VOCES)
-    a, sr = _kokoro.create(dicho, voice=VOZ, speed=VELOCIDAD, lang="es")
+    a, sr = _kokoro.create(dicho, voice=estilo_voz(), speed=VELOCIDAD, lang="es")
     assert sr == VOZ_SR
     a = a.astype(np.float32)
     # recorta silencios de los extremos

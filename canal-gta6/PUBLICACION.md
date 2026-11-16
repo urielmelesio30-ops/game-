@@ -98,3 +98,21 @@ Robert Downey Jr. vuelve a Marvel… como el villano 😈 ¿Quién es Víctor vo
 `#VengadoresDoomsday #DoctorDoom #Marvel #RobertDowneyJr #pixelart`
 
 Activa también "Contenido generado por IA" (voz sintética). Los personajes son sprites pixel art propios, sin imágenes ni logos de Marvel.
+
+---
+
+## Vídeo 12 · Versión «ritmo» de Doom (recomendada en vez de la 11)
+
+`salida/12-doom-ritmo/12-doom-ritmo.mp4` · portada: `salida/12-doom-ritmo/portada.png`
+
+Formato pensado para retención: algo distinto cada ~2,7 s (23 momentos en ~1 minuto), arranque en plena acción, poco texto en pantalla, golpes de cámara, temblores, destellos y efectos de sonido en cada cambio. Dura algo más de 1 minuto (TikTok solo paga vídeos de más de 1 minuto).
+
+**Texto:**
+Robert Downey Jr. ahora es el VILLANO 😈 ¿Quién es Víctor von Doom? 👾 ¿Te convence? SÍ o NO 👇
+`#VengadoresDoomsday #DoctorDoom #Marvel #RobertDowneyJr #pixelart`
+
+**Para que la gente se quede más tiempo (Reels y TikTok):**
+- Los 3 primeros segundos deciden todo: no recortes el principio, ya empieza con el rayo.
+- Pon la portada, pero deja que el vídeo arranque desde el primer fotograma (no añadas intro).
+- Responde a los comentarios de «SÍ / NO» en la primera hora: la conversación empuja el vídeo.
+- En Instagram, comparte el Reel también en tu historia con una encuesta SÍ/NO.

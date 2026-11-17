@@ -433,7 +433,7 @@ def render():
     cuadros = range(int(total * FPS)) if not muestra else [int((b["t0"] + b["dur"] * 0.6) * FPS) for b in beats]
     for fi in cuadros:
         tg = fi / FPS
-        kb = max(i for i, b in enumerate(beats) if b["t0"] <= tg)
+        kb = max((i for i, b in enumerate(beats) if b["t0"] <= tg), default=0)
         b = beats[kb]; tl = tg - b["t0"]
         c = fondo.copy()
         d = ImageDraw.Draw(c)

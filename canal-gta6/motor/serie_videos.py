@@ -252,7 +252,7 @@ V[1] = dict(slug="19-portada-2027-mensajes-ocultos", gancho="LA PORTADA QUE «PR
     dict(f=E_varios("espacio", ["cohete", "satelite"], "LA CARRERA ESPACIAL", CI, k=1.0), say="También hay cohetes, satélites y una bandera china: la carrera espacial ya no es solo cosa de Estados Unidos."),
     dict(f=E_texto("rojo", "PERO OJO", "NO ES UNA PROFECÍA"), say="Pero ojo: no es una profecía.", sfx=(0.1, "golpe")),
     dict(f=E_icono("morado", "bola", "SON SUS APUESTAS", AM, 1.3, extra=anim_tachar(0.8)), say="Son los temas que sus periodistas creen que van a marcar el año. Nada más… y nada menos."),
-    dict(f=E_final("rojo", 1, "¿CUÁL SE CUMPLIRÁ?"), say="¿Cuál crees que se cumplirá? Te leo en comentarios. Y sígueme para más.", sfx=(0.3, "logro")),
+    dict(f=E_final("rojo", 1, "¿CUÁL SE CUMPLIRÁ?"), say="¿Cuál crees que se cumplirá? Te leo en comentarios. Y sígueme: esta es la parte uno de una serie de diez.", sfx=(0.3, "logro")),
 ])
 
 V[2] = dict(slug="20-eclipse-del-siglo-2027", gancho="EL ECLIPSE DEL SIGLO", color=(255, 200, 60), giro=9,
@@ -269,7 +269,7 @@ V[2] = dict(slug="20-eclipse-del-siglo-2027", gancho="EL ECLIPSE DEL SIGLO", col
     dict(f=E_texto("rojo", "PERO OJO", "PROTEGE TUS OJOS", RO, BL), say="Pero ojo: nunca lo mires sin gafas especiales de eclipse.", sfx=(0.1, "golpe")),
     dict(f=E_icono("cielo", "gafas", "SOLO GAFAS HOMOLOGADAS", BL, 1.5, extra=anim_pulso("prohibido", 820, 1150, 0.35, 0.6)), say="Ni con gafas de sol, ni a través del móvil o unos prismáticos: puede dañarte la vista para siempre."),
     dict(f=E_icono("noche", "sol", "APÚNTALO YA", AM, 1.2, extra=anim_pulso("gafas", 830, 1150, 0.4, 0.4)), say="Así que apúntatelo: 2 de agosto de 2027. Y prepara las gafas con tiempo."),
-    dict(f=E_final("noche", 2, "GUÁRDALO"), say="Guárdalo para no olvidarlo, y sígueme para más.", sfx=(0.3, "logro")),
+    dict(f=E_final("noche", 2, "GUÁRDALO"), say="Guárdalo para no olvidarlo y sígueme: esta es la parte dos de diez.", sfx=(0.3, "logro")),
 ])
 
 V[3] = dict(slug="21-sobrevivio-a-dos-bombas-atomicas", gancho="SOBREVIVIÓ A DOS BOMBAS ATÓMICAS", color=(255, 150, 60), giro=8,
@@ -288,7 +288,7 @@ V[3] = dict(slug="21-sobrevivio-a-dos-bombas-atomicas", gancho="SOBREVIVIÓ A DO
     dict(f=E_icono("cielo", "prohibido", "NUNCA MÁS", RO, 1.1, extra=anim_pulso("hongo", W / 2, 820, 0.5, 0.0)), say="Años después, dedicó su vida a pedir que nunca más se usaran bombas atómicas."),
     dict(f=E_icono("papel", "diploma", "EL ÚNICO RECONOCIDO", AM, 1.3), say="En 2009, Japón le reconoció oficialmente como superviviente de las dos bombas. El único."),
     dict(f=E_contador("noche", 93, "AÑOS", "VIVIÓ HASTA LOS…", AM, "estrella"), say="Murió en 2010, con noventa y tres años."),
-    dict(f=E_final("atardecer", 3, "¿LO SABÍAS?"), say="Increíble, ¿no? Sígueme para más historias así.", sfx=(0.3, "logro")),
+    dict(f=E_final("atardecer", 3, "¿LO SABÍAS?"), say="Increíble, ¿no? Sígueme, que esta es la parte tres de una serie de diez.", sfx=(0.3, "logro")),
 ])
 
 V[4] = dict(slug="22-el-pueblo-donde-no-puedes-morir", gancho="EL PUEBLO DONDE NO PUEDES MORIR", color=(80, 200, 255), giro=8,
@@ -305,7 +305,7 @@ V[4] = dict(slug="22-el-pueblo-donde-no-puedes-morir", gancho="EL PUEBLO DONDE N
     dict(f=E_vs("cielo", "bebe", "avion", "BEBÉ", "AL CONTINENTE", "LAS EMBARAZADAS VIAJAN", CI, AM), say="Las embarazadas viajan al continente unas semanas antes de dar a luz."),
     dict(f=E_texto("morado", "PERO OJO", "NO HAY NINGUNA LEY", AM, BL), say="Pero ojo: no hay ninguna ley que lo prohíba. Simplemente, no se hace."),
     dict(f=E_vs("noche", "estrella", "sol", "MESES DE NOCHE", "SOL A MEDIANOCHE", "Y ADEMÁS…", CI, AM), say="Y además, allí en invierno no sale el sol durante meses… y en verano no se pone."),
-    dict(f=E_final("nieve", 4, "¿VIVIRÍAS ALLÍ?"), say="¿Vivirías allí? Sígueme para más.", sfx=(0.3, "logro")),
+    dict(f=E_final("nieve", 4, "¿VIVIRÍAS ALLÍ?"), say="¿Vivirías allí? Sígueme: esta es la parte cuatro de diez.", sfx=(0.3, "logro")),
 ])
 
 V[5] = dict(slug="23-el-agujero-mas-profundo-del-mundo", gancho="EL AGUJERO MÁS PROFUNDO DEL MUNDO", color=(255, 120, 60), giro=11,
@@ -323,7 +323,7 @@ V[5] = dict(slug="23-el-agujero-mas-profundo-del-mundo", gancho="EL AGUJERO MÁS
     dict(f=E_icono("papel", "tapa", "ABANDONADO EN 1992", BL, 1.5), say="En 1992 se paró el proyecto, y hoy solo queda esa tapa soldada."),
     dict(f=E_icono("morado", "altavoz", "¿GRITOS DEL INFIERNO?", RO, 1.3, extra=anim_tachar(1.0)), say="Pero ojo con el bulo de los gritos del infierno grabados ahí abajo: es falso.", sfx=("70%", "golpe")),
     dict(f=E_barras("cielo", [("KOLA", 12262, RO), ("CORTEZA AHÍ", 35000, (150, 110, 70))], "SOLO UN TERCIO", abajo=True), say="Y aun siendo el más profundo… solo atravesó un tercio de la corteza en ese punto."),
-    dict(f=E_final("noche", 5, "¿TE ATREVERÍAS?"), say="¿Bajarías ahí? Sígueme para más.", sfx=(0.3, "logro")),
+    dict(f=E_final("noche", 5, "¿TE ATREVERÍAS?"), say="¿Bajarías ahí? Sígueme: esta es la parte cinco de diez.", sfx=(0.3, "logro")),
 ])
 
 V[6] = dict(slug="24-la-isla-de-los-conejos", gancho="LA ISLA DE LOS CONEJOS (Y SU SECRETO)", color=(255, 120, 170), giro=7,
@@ -340,7 +340,7 @@ V[6] = dict(slug="24-la-isla-de-los-conejos", gancho="LA ISLA DE LOS CONEJOS (Y 
     dict(f=E_vs("verde", "conejo", "prohibido", "CONEJOS: SÍ", "PERROS Y GATOS: NO", "SUS REGLAS", VE, RO), say="Hoy en la isla no se permiten ni perros ni gatos, y los conejos viven a sus anchas."),
     dict(f=E_icono("papel", "templo", "UN MUSEO PARA RECORDAR", AM, 1.2), say="Y allí mismo hay un museo del gas venenoso, para que no se olvide lo que pasó."),
     dict(f=E_varios("verde", ["conejo", "fabrica", "conejo"], "TERNURA E HISTORIA", BL), say="Así que, si vas, entre conejo y conejo… estás pisando un trozo de historia."),
-    dict(f=E_final("verde", 6, "¿IRÍAS?"), say="¿Irías? Sígueme para más.", sfx=(0.3, "logro")),
+    dict(f=E_final("verde", 6, "¿IRÍAS?"), say="¿Irías? Sígueme: esta es la parte seis de diez.", sfx=(0.3, "logro")),
 ])
 
 V[7] = dict(slug="25-el-pais-donde-el-chicle-esta-prohibido", gancho="EL PAÍS DONDE EL CHICLE ESTÁ PROHIBIDO", color=(255, 90, 140), giro=7,
@@ -356,7 +356,7 @@ V[7] = dict(slug="25-el-pais-donde-el-chicle-esta-prohibido", gancho="EL PAÍS D
     dict(f=E_icono("cielo", "farmacia", "LA EXCEPCIÓN", VE, 1.3), say="Y desde 2004 hay una excepción: el chicle medicinal, como el de nicotina, que se compra en la farmacia."),
     dict(f=E_varios("ciudad", ["multa", "metro", "multa"], "NORMAS MUY ESTRICTAS", AM), say="Singapur es famosa por sus normas estrictas: también hay multas por tirar basura… o por no tirar de la cadena en un baño público."),
     dict(f=E_vs("ciudad", "chicle", "estrella", "¿EXAGERADO?", "¿FUNCIONA?", "TÚ DECIDES", RO, VE), say="¿Exagerado… o funciona? Te leo en comentarios."),
-    dict(f=E_final("rojo", 7, "SÍGUEME"), say="Y sígueme para más curiosidades.", sfx=(0.3, "logro")),
+    dict(f=E_final("rojo", 7, "SÍGUEME"), say="Y sígueme, que esta es la parte siete de diez.", sfx=(0.3, "logro")),
 ])
 
 V[8] = dict(slug="26-11-dias-sin-dormir", gancho="11 DÍAS SIN DORMIR", color=(150, 120, 255), giro=9,
@@ -373,7 +373,7 @@ V[8] = dict(slug="26-11-dias-sin-dormir", gancho="11 DÍAS SIN DORMIR", color=(1
     dict(f=E_texto("noche", "PERO OJO", "LO PAGÓ CON LOS AÑOS", AM, RO), say="Pero ojo: años después contó que sufrió insomnio durante mucho tiempo.", sfx=(0.1, "golpe")),
     dict(f=E_icono("papel", "trofeo", "RÉCORD QUE YA NO EXISTE", BL, 1.3, extra=anim_tachar(0.8)), say="Hoy, el libro Guinness ya no acepta este tipo de récords: es demasiado peligroso."),
     dict(f=E_icono("morado", "cerebro", "DORMIR LIMPIA TU CEREBRO", CI, 1.2), say="Porque dormir no es perder el tiempo: es cuando tu cerebro se limpia y guarda tus recuerdos."),
-    dict(f=E_final("noche", 8, "A DORMIR…"), say="Así que vete a dormir… pero antes, sígueme para más.", sfx=(0.3, "logro")),
+    dict(f=E_final("noche", 8, "A DORMIR…"), say="Así que vete a dormir… pero antes, sígueme. Esta es la parte ocho de diez.", sfx=(0.3, "logro")),
 ])
 
 V[9] = dict(slug="27-que-pasa-si-caes-en-un-agujero-negro", gancho="¿Y SI CAES EN UN AGUJERO NEGRO?", color=(255, 160, 60), giro=5,
@@ -390,7 +390,7 @@ V[9] = dict(slug="27-que-pasa-si-caes-en-un-agujero-negro", gancho="¿Y SI CAES 
     dict(f=E_icono("espacio", "reloj", "EL TIEMPO VA MÁS LENTO", AM, 1.4, rayos_=False, gira=15), say="Porque cerca de un agujero negro, el tiempo pasa más despacio."),
     dict(f=E_contador("espacio", 4, "MILLONES DE SOLES", "EN NUESTRA GALAXIA", AM, "agujero"), say="En el centro de nuestra galaxia hay uno con la masa de unos cuatro millones de soles."),
     dict(f=E_contador("espacio", 26000, "AÑOS LUZ", "TRANQUI: ESTÁ LEJOS", VE, "estrella"), say="Tranquilo: está a unos veintiséis mil años luz de aquí."),
-    dict(f=E_final("espacio", 9, "SÍGUEME"), say="¿Te lanzarías? Sígueme para más.", sfx=(0.3, "logro")),
+    dict(f=E_final("espacio", 9, "SÍGUEME"), say="¿Te lanzarías? Sígueme: esta es la parte nueve de diez.", sfx=(0.3, "logro")),
 ])
 
 V[10] = dict(slug="28-por-que-olvidas-al-cruzar-una-puerta", gancho="POR QUÉ OLVIDAS AL CRUZAR UNA PUERTA", color=(90, 230, 120), giro=9,
@@ -407,7 +407,7 @@ V[10] = dict(slug="28-por-que-olvidas-al-cruzar-una-puerta", gancho="POR QUÉ OL
     dict(f=E_texto("verde", "EL TRUCO", "VUELVE ATRÁS", AM, BL), say="El truco: vuelve a la habitación donde estabas.", sfx=(0.2, "golpe")),
     dict(f=lambda fr, d, tl, dur: s_puerta(fr, d, tl, dur, olvida=False), say="Muchas veces, al volver, te acuerdas al instante."),
     dict(f=E_icono("verde", "altavoz", "O DILO EN VOZ ALTA", BL, 1.2), say="O repítelo en voz alta mientras caminas."),
-    dict(f=E_final("verde", 10, "SÍGUEME"), say="Y el último truco: sígueme para más.", sfx=(0.3, "logro")),
+    dict(f=E_final("verde", 10, "SÍGUEME"), say="Y el último truco: sígueme. Esta era la parte diez de diez… y vienen más.", sfx=(0.3, "logro")),
 ])
 
 

@@ -1,6 +1,6 @@
 # Serie «Cosas que no sabías» — 10 vídeos (TikTok / Reels / Shorts)
 
-Cada vídeo termina con un «sígueme para más».
+Cada vídeo termina con «PARTE X/10» y un «sígueme» para que la gente siga la serie.
 Consejo: sube 1 al día a la misma hora y fija (pin) el 1 en tu perfil.
 
 | # | Archivo (en `salida/`) | Título para poner | Descripción + hashtags |

@@ -319,6 +319,89 @@ def preparar_adornos():
         ADORNOS[clave] = im
 
 
+# ------------------------------------------------------------- efectos de vídeo
+_rng = np.random.default_rng(11)
+GRANO = [(_rng.standard_normal((H // 2, W // 2)) * 7).astype(np.int16).repeat(2, 0).repeat(2, 1) for _ in range(6)]
+_yy, _xx = np.mgrid[0:H, 0:W]
+_DIAG = (_xx + _yy * 0.6).astype(np.float32)
+
+
+def transicion(arr, tl, kb):
+    """Entrada de escena (0,28 s): barrido, zoom, círculo o glitch, rotando."""
+    D = 0.28
+    if kb == 0 or tl >= D:
+        return arr
+    u = ease(tl / D)
+    tipo = kb % 4
+    if tipo == 0:      # barrido rápido con desenfoque de movimiento
+        dx = int((1 - u) * W * 0.4)
+        capas = [np.roll(arr, dx + k * int(30 * (1 - u)), axis=1).astype(np.uint16) for k in range(4)]
+        return (sum(capas) // 4).astype(np.uint8)
+    if tipo == 1:      # zoom de golpe
+        z = 1 + 0.35 * (1 - u)
+        im = Image.fromarray(arr)
+        nw, nh = int(W * z), int(H * z)
+        im = im.resize((nw, nh), Image.BILINEAR).crop(((nw - W) // 2, (nh - H) // 2, (nw - W) // 2 + W, (nh - H) // 2 + H))
+        return np.asarray(im)
+    if tipo == 2:      # círculo que se abre
+        r = u * math.hypot(W, H) / 2
+        mask = (_xx - W / 2) ** 2 + (_yy - H / 2) ** 2 <= r * r
+        out = np.zeros_like(arr); out[mask] = arr[mask]
+        return out
+    # glitch: canales RGB desplazados y franjas movidas
+    out = arr.copy()
+    k = int((1 - u) * 40)
+    out[..., 0] = np.roll(arr[..., 0], k, axis=1)
+    out[..., 2] = np.roll(arr[..., 2], -k, axis=1)
+    rng = np.random.default_rng(int(tl * 1000))
+    for _ in range(6):
+        y0 = int(rng.integers(0, H - 60)); hh = int(rng.integers(10, 60))
+        out[y0:y0 + hh] = np.roll(out[y0:y0 + hh], int(rng.integers(-80, 80)), axis=1)
+    return out
+
+
+def confeti(fr, t, n=70, semilla=3):
+    rng = np.random.default_rng(semilla)
+    d = ImageDraw.Draw(fr)
+    cols = [(255, 90, 140), (80, 220, 255), (255, 214, 80), (120, 230, 140), (200, 120, 255)]
+    for i in range(n):
+        x0 = rng.uniform(0, W); v = rng.uniform(500, 900); fase = rng.uniform(0, 6.28)
+        y = -60 + v * t - 30 * i % 200
+        if y > H:
+            continue
+        x = x0 + math.sin(t * 3 + fase) * 60
+        a = t * 6 + fase
+        w_, h_ = 26, 14
+        pts = [(x + math.cos(a) * w_ - math.sin(a) * h_, y + math.sin(a) * w_ + math.cos(a) * h_),
+               (x - math.cos(a) * w_ - math.sin(a) * h_, y - math.sin(a) * w_ + math.cos(a) * h_),
+               (x - math.cos(a) * w_ + math.sin(a) * h_, y - math.sin(a) * w_ - math.cos(a) * h_),
+               (x + math.cos(a) * w_ + math.sin(a) * h_, y + math.sin(a) * w_ - math.cos(a) * h_)]
+        d.polygon(pts, fill=cols[i % len(cols)])
+
+
+def destello_luz(arr, tg):
+    """Destello de color que cruza la pantalla cada ~7 s."""
+    fase = (tg % 7.0) / 1.1
+    if fase > 1:
+        return arr
+    pos = -600 + fase * (W + 2 * H * 0.6 + 600)
+    banda = np.clip(1 - np.abs(_DIAG - pos) / 260, 0, 1) * 0.35
+    col = np.array(COLOR_MARCO, np.float32)
+    return (arr * (1 - banda[..., None]) + col * banda[..., None]).astype(np.uint8)
+
+
+def momento_clave(beat, tl):
+    """(temblor_px, destello) si estamos justo en el efecto de sonido de la escena."""
+    if "sfx" not in beat:
+        return 0, 0.0
+    off = beat["sfx"][0]
+    off = beat["dur"] * float(off[:-1]) / 100 if isinstance(off, str) else off
+    dt = tl - off
+    if 0 <= dt < 0.35:
+        return int(18 * (1 - dt / 0.35)), 0.35 * (1 - dt / 0.35)
+    return 0, 0.0
+
+
 def adornos(fr, tg, total, kb, tl, beat):
     d = ImageDraw.Draw(fr)
     # marco de neón que late
@@ -660,6 +743,12 @@ def render():
         z = 1.0 + 0.05 * (tl / b["dur"]) + 0.06 * math.exp(-tl * 9)
         nw, nh = int(W * z), int(H * z)
         escena = escena.resize((nw, nh), Image.BILINEAR).crop(((nw - W) // 2, (nh - H) // 2, (nw - W) // 2 + W, (nh - H) // 2 + H))
+        # transición de entrada (sobre la escena, sin tocar textos ni adornos)
+        if kb > 0 and tl < 0.28:
+            escena = Image.fromarray(transicion(np.asarray(escena.convert("RGB")), tl, kb)).convert("RGBA")
+        # confeti en el giro final y en el cierre
+        if (GIRO is not None and kb == GIRO and tl < 3.0) or kb == len(beats) - 1:
+            confeti(escena, tl, semilla=kb)
         # viñeta inferior para que los subtítulos se lean siempre
         escena.alpha_composite(VINETA)
         pts = palabras_t[kb]
@@ -670,8 +759,14 @@ def render():
             escena.alpha_composite(cap, (0, 1440))
         adornos(escena, tg, total, kb, tl, b)
         arr = np.asarray(escena.convert("RGB"))
-        if tl < 0.08 and kb > 0:  # destello suave en el corte
-            arr = (arr.astype(np.int16) * 0.6 + 255 * 0.4).astype(np.uint8)
+        arr = destello_luz(arr, tg)
+        temblor, flash = momento_clave(b, tl)
+        if temblor:
+            rng_t = np.random.default_rng(fi)
+            arr = np.roll(arr, (int(rng_t.integers(-temblor, temblor + 1)), int(rng_t.integers(-temblor, temblor + 1))), (0, 1))
+        if flash:
+            arr = (arr.astype(np.float32) * (1 - flash) + 255 * flash).astype(np.uint8)
+        arr = np.clip(arr.astype(np.int16) + GRANO[fi % len(GRANO)][..., None], 0, 255).astype(np.uint8)
         if muestra:
             Image.fromarray(arr).resize((270, 480)).save(os.path.join(SALIDA, f"muestra_{kb:02d}.png"))
         else:

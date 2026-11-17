@@ -420,7 +420,7 @@ def adornos(fr, tg, total, kb, tl, beat):
     if 0.6 < tg < 4.0:
         pegar(fr, escalar(ADORNOS["espera"], max(0.05, back((tg - 0.6) / 0.3))), W / 2, 222)
     if GIRO is not None and kb == GIRO and tl < 2.2:
-        pegar(fr, escalar(ADORNOS["ojo"], max(0.05, back(tl / 0.3)) * (1 + 0.05 * math.sin(tl * 12))), W / 2, 222)
+        pegar(fr, escalar(ADORNOS["ojo"], max(0.05, back(tl / 0.3)) * (1 + 0.05 * math.sin(tl * 12))), W / 2, 450)
     # pegatina que salta en cada escena (alternando lado), con bamboleo
     tipo = beat.get("pegatina") or CICLO_PEGATINAS[kb % len(CICLO_PEGATINAS)]
     if tipo and 0.25 < tl < beat["dur"] - 0.15:

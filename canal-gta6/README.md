@@ -35,3 +35,21 @@ capturas, tráileres, logos ni música de Rockstar. Fuentes Press Start 2P y Jer
 Games ni Take-Two; el aviso aparece en los primeros segundos de cada vídeo.
 
 `muestras_voz/` tiene las muestras de voz para comparar.
+
+
+## Vídeos 3D en un Mac con chip Apple (mucho más rápido)
+
+```bash
+brew install python@3.13 ffmpeg git
+git clone -b claude/gta6-channel-ten-videos-1vzoms https://github.com/urielmelesio30-ops/game-.git
+cd game-/canal-gta6
+python3.13 -m venv .venv && source .venv/bin/activate
+pip install bpy kokoro-onnx soundfile scipy pillow numpy
+mkdir -p tts && curl -L -o tts/kokoro-v1.0.onnx https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.onnx \
+  && curl -L -o tts/voices-v1.0.bin https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
+cd motor
+export KOKORO_MODEL=../tts/kokoro-v1.0.onnx KOKORO_VOICES=../tts/voices-v1.0.bin GPU=1
+python video3d_doomsday.py     # 6 cosas antes de Doomsday
+python video3d_teorias.py      # teorías
+```
+Los vídeos salen en `canal-gta6/salida/13-doomsday-6-cosas-3d/` y `canal-gta6/salida/14-doomsday-teorias-3d/`.

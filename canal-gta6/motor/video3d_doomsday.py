@@ -50,7 +50,15 @@ def construir(tiempos):
     sc = bpy.context.scene
     sc.render.engine = "CYCLES"
     sc.cycles.device = "CPU"
-    sc.cycles.samples = int(os.environ.get("MUESTRAS", "6"))
+    if os.environ.get("GPU"):   # Mac con chip Apple: GPU por Metal (GPU=1); también CUDA/OPTIX/HIP
+        prefs = bpy.context.preferences.addons["cycles"].preferences
+        prefs.compute_device_type = os.environ.get("GPU_TIPO", "METAL")
+        prefs.get_devices()
+        for dv in prefs.devices:
+            dv.use = True
+        sc.cycles.device = "GPU"
+        print("[3d] GPU:", [dv.name for dv in prefs.devices if dv.use], flush=True)
+    sc.cycles.samples = int(os.environ.get("MUESTRAS", "16" if os.environ.get("GPU") else "6"))
     sc.cycles.use_denoising = True
     sc.cycles.max_bounces = 3
     sc.cycles.diffuse_bounces = 2

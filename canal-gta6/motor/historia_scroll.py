@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Divulgación animada en 2D: por qué no puedes dejar de deslizar en TikTok."""
 import math, os, sys
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import audio
@@ -73,17 +73,84 @@ def paloma(picotea=0.0):
     return suave(440, 380, dib)
 
 
-def cerebro(brillo=0.0):
-    def dib(d, s):
-        def S(*v):
-            return [x * s for x in v]
-        base = (255, 150, 180)
-        col = tuple(int(base[k] + (255 - base[k]) * brillo) for k in range(3))
-        for (x, y, r) in ((180, 200, 150), (330, 170, 150), (460, 220, 140), (250, 330, 150), (410, 340, 140)):
-            d.ellipse(S(x - r, y - r, x + r, y + r), fill=col)
-        for k in range(6):
-            d.arc(S(120 + k * 60, 140, 260 + k * 60, 300), 200, 330, fill=(220, 100, 140), width=10 * s)
-    return suave(640, 520, dib)
+def cerebro(brillo=0.0, t=0.0):
+    """Cerebro de dibujo animado: dos lóbulos con pliegues, cerebelo, tronco, sombreado, brillo y carita."""
+    SS = 3
+    w, h = 640, 560
+    def S(*v):
+        return [int(x * SS) for x in v]
+    base = (255, 140, 175)
+    col = tuple(int(base[k] + (255 - base[k]) * brillo * 0.6) for k in range(3))
+    osc = tuple(int(v * 0.78) for v in col)
+    pliegue = (196, 70, 120)
+    linea = (110, 30, 70)
+    # silueta
+    forma = Image.new("L", (w * SS, h * SS), 0)
+    fd = ImageDraw.Draw(forma)
+    lob = [(170, 230, 135), (290, 165, 140), (420, 175, 135), (500, 260, 110), (250, 320, 130), (390, 310, 130), (130, 320, 90)]
+    for x, y, r in lob:
+        fd.ellipse(S(x - r, y - r, x + r, y + r), fill=255)
+    cereb = (430, 360, 560, 450)
+    tronco = (395, 380, 455, 510)
+    fd.rounded_rectangle(S(*tronco), radius=25 * SS, fill=255)
+    fd.ellipse(S(*cereb), fill=255)
+    im = Image.new("RGBA", (w * SS, h * SS), (0, 0, 0, 0))
+    # contorno grueso
+    borde = forma.filter(ImageFilter.MaxFilter(9 * SS + 1 if (9 * SS) % 2 == 0 else 9 * SS))
+    im.paste(Image.new("RGBA", im.size, linea + (255,)), (0, 0), borde)
+    # relleno con sombra inferior
+    capa = Image.new("RGBA", im.size, col + (255,))
+    cd = ImageDraw.Draw(capa)
+    sombra_l = Image.new("L", capa.size, 0)
+    ImageDraw.Draw(sombra_l).ellipse(S(20, 330, 660, 700), fill=150)
+    sombra_l = sombra_l.filter(ImageFilter.GaussianBlur(30 * SS))
+    capa.paste(Image.new("RGBA", capa.size, (205, 80, 130, 255)), (0, 0), sombra_l)
+    cd.rounded_rectangle(S(*tronco), radius=25 * SS, fill=(220, 110, 150))
+    cd.ellipse(S(*cereb), fill=(235, 120, 160))
+    for k in range(4):
+        cd.arc(S(440, 368 + k * 18, 550, 420 + k * 18), 200, 340, fill=pliegue, width=5 * SS)
+    # pliegues ondulados (trazos curvos largos, como circunvoluciones)
+    for fila in range(7):
+        y0 = 80 + fila * 46
+        for seg in range(5):
+            x_ini = 20 + seg * 125 + (fila % 2) * 60
+            pts = [((xx) * SS, (y0 + 14 * math.sin(xx / 22 + fila * 1.3 + seg)) * SS) for xx in range(x_ini, x_ini + 95, 4)]
+            if fila >= 5 and 200 < x_ini < 420:
+                continue
+            cd.line(pts, fill=pliegue, width=7 * SS, joint="curve")
+    # cisura central (arriba, entre los dos lóbulos)
+    cd.line([(p[0] * SS, p[1] * SS) for p in ((300, 40), (292, 90), (306, 140), (298, 200))], fill=linea, width=8 * SS, joint="curve")
+    # brillos
+    cd.ellipse(S(150, 90, 260, 140), fill=(255, 225, 235))
+    cd.ellipse(S(330, 60, 400, 90), fill=(255, 225, 235))
+    im.paste(capa, (0, 0), forma)
+    d = ImageDraw.Draw(im)
+    # carita
+    parp = 1.0 if (t % 2.6) > 0.12 else 0.15
+    for ex in (240, 360):
+        d.ellipse(S(ex - 32, 300 - 36 * parp, ex + 32, 300 + 36 * parp), fill=(255, 255, 255), outline=linea, width=5 * SS)
+        if parp > 0.5:
+            d.ellipse(S(ex - 14 + 6, 300 - 16, ex + 14 + 6, 300 + 16), fill=(30, 20, 40))
+            d.ellipse(S(ex + 2, 290, ex + 12, 300), fill=(255, 255, 255))
+    d.arc(S(265, 320, 335, 380), 20, 160, fill=linea, width=7 * SS)
+    for ex in (195, 405):
+        d.ellipse(S(ex - 26, 345, ex + 26, 365), fill=(255, 90, 130))
+    out = im.resize((w, h), Image.LANCZOS)
+    if brillo > 0:
+        halo = Image.new("RGBA", (w + 160, h + 160), (0, 0, 0, 0))
+        hd = ImageDraw.Draw(halo)
+        for r in range(6):
+            a = int(30 * brillo * (6 - r) / 6)
+            hd.ellipse((40 - r * 12, 40 - r * 12, w + 120 + r * 12, h + 120 + r * 12), outline=(255, 120, 200, a), width=14)
+        for k in range(8):
+            ang = k * math.pi / 4 + t * 1.5
+            cx, cy = (w + 160) / 2 + math.cos(ang) * (w / 2 + 50), (h + 160) / 2 + math.sin(ang) * (h / 2 + 40)
+            rr = 10 + 8 * brillo * (1 + math.sin(t * 8 + k)) / 2
+            hd.polygon([(cx, cy - rr * 2), (cx + rr / 2, cy), (cx, cy + rr * 2), (cx - rr / 2, cy)], fill=(255, 240, 140, 230))
+            hd.polygon([(cx - rr * 2, cy), (cx, cy + rr / 2), (cx + rr * 2, cy), (cx, cy - rr / 2)], fill=(255, 240, 140, 230))
+        halo.alpha_composite(out, (80, 80))
+        return halo
+    return out
 
 
 def icono_bucle(tipo):
@@ -155,7 +222,7 @@ def s_hora(fr, d, tl, dur):
 
 def s_razon(fr, d, tl, dur):
     fr.alpha_composite(A["cuarto_osc"])
-    pegar(fr, escalar(cerebro(0.3 + 0.3 * math.sin(tl * 4)), 1.2), W / 2, 760)
+    pegar(fr, escalar(cerebro(0.3 + 0.3 * math.sin(tl * 4), tl), 1.15), W / 2, 760)
     pegar(fr, escalar(texto_grande("NO ES SOLO CULPA TUYA", (255, 255, 255), 100), max(0.05, back(tl / 0.4))), W / 2, 300)
 
 
@@ -295,7 +362,7 @@ BEATS = [
     dict(f=s_hora, say="¿Te ha pasado que abres TikTok cinco minutos… y de repente ha pasado una hora?"),
     dict(f=s_razon, say="No es solo culpa tuya. Hay una razón psicológica."),
     dict(f=s_nombre, say="Se llama recompensa variable.", sfx=(0.2, "golpe")),
-    dict(f=s_traga, say="Funciona como una máquina tragaperras: nunca sabes si el próximo vídeo va a ser buenísimo… o un rollo."),
+    dict(f=s_traga, say="Funciona como una máquina de casino: nunca sabes si el próximo vídeo va a ser buenísimo… o un rollo."),
     dict(f=s_anzuelo, say="Y justo esa incertidumbre es lo que te engancha."),
     dict(f=s_skinner, say="En los años cincuenta, el psicólogo B. F. Skinner lo estudió con palomas."),
     dict(f=s_paloma, say="Cuando la comida salía de forma impredecible, picaban el botón sin parar."),

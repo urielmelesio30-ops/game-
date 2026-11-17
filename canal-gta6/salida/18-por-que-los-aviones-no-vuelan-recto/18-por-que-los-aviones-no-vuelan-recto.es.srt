@@ -1,0 +1,64 @@
+1
+00:00:00,050 --> 00:00:02,554
+¿Por qué los aviones no vuelan en línea recta?
+
+2
+00:00:02,674 --> 00:00:06,313
+Si miras la ruta de un vuelo en el mapa, verás una curva rarísima.
+
+3
+00:00:06,433 --> 00:00:10,175
+De Nueva York a Tokio, en vez de ir recto, el avión sube hasta Alaska.
+
+4
+00:00:10,295 --> 00:00:13,824
+Parece un rodeo enorme… pero en realidad, es el camino más corto.
+
+5
+00:00:13,944 --> 00:00:16,644
+El truco es que la Tierra no es plana: es una esfera.
+
+6
+00:00:16,764 --> 00:00:21,125
+Y para dibujarla en un mapa plano hay que estirarla, sobre todo cerca de los polos.
+
+7
+00:00:21,245 --> 00:00:26,779
+Por eso Groenlandia parece casi tan grande como África… y en realidad es catorce veces más pequeña.
+
+8
+00:00:26,899 --> 00:00:30,492
+Haz la prueba: coge una pelota y estira un hilo entre dos ciudades.
+
+9
+00:00:30,612 --> 00:00:32,733
+Verás que el hilo se tuerce hacia el polo.
+
+10
+00:00:32,853 --> 00:00:36,023
+Y cuando pasas ese hilo al mapa plano… aparece la curva.
+
+11
+00:00:36,143 --> 00:00:40,716
+En este vuelo se ahorran casi dos mil kilómetros, mucho combustible y horas de viaje.
+
+12
+00:00:40,836 --> 00:00:43,299
+Pero ojo: no siempre siguen la ruta más corta.
+
+13
+00:00:43,419 --> 00:00:48,654
+También aprovechan la corriente en chorro, un viento que sopla a más de doscientos kilómetros por hora.
+
+14
+00:00:48,774 --> 00:00:52,321
+Por eso, ir de América a Europa suele ser más rápido que volver.
+
+15
+00:00:52,441 --> 00:00:55,927
+Y además esquivan tormentas y zonas cerradas al tráfico aéreo.
+
+16
+00:00:56,047 --> 00:01:00,578
+Así que la próxima vez que veas esa curva… ya sabes: es un atajo. Sígueme para más.
+

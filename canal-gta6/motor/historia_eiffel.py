@@ -314,6 +314,9 @@ BEATS = [
 ]
 
 Hm.BEATS = BEATS
+Hm.GANCHO = 'LA ESTAFA MÁS LOCA DE LA HISTORIA'
+Hm.COLOR_MARCO = (255, 214, 80)
+Hm.GIRO = 11
 Hm.assets = assets_extra
 
 if __name__ == "__main__":

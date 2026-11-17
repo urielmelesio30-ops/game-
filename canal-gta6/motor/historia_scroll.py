@@ -312,6 +312,9 @@ BEATS = [
 ]
 
 Hm.BEATS = BEATS
+Hm.GANCHO = 'POR QUÉ NO PUEDES DEJAR EL MÓVIL'
+Hm.COLOR_MARCO = (255, 90, 140)
+Hm.GIRO = 16
 Hm.assets = assets_extra
 
 if __name__ == "__main__":

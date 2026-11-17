@@ -258,6 +258,105 @@ def sombra(fr, x, y, w):
     pegar(fr, s, x, y)
 
 
+# ------------------------------------------------------------- adornos para captar la atención
+GANCHO = "EL ROBO MÁS FAMOSO DE LA HISTORIA"   # titular fijo arriba (cada vídeo pone el suyo)
+COLOR_MARCO = (255, 214, 80)
+GIRO = None   # índice de la escena con el giro final: antes sale «OJO A ESTO»
+
+
+def pegatina(tipo):
+    """Pegatinas dibujadas (originales), estilo emoji."""
+    def dib(d, s):
+        def S(*v):
+            return [x * s for x in v]
+        am, neg = (255, 205, 60), (40, 30, 30)
+        if tipo in ("sorpresa", "risa", "ojos_cara"):
+            d.ellipse(S(10, 10, 230, 230), fill=am, outline=(220, 150, 30), width=6 * s)
+            if tipo == "sorpresa":
+                d.ellipse(S(70, 75, 100, 115), fill=neg); d.ellipse(S(140, 75, 170, 115), fill=neg)
+                d.ellipse(S(95, 140, 145, 200), fill=neg)
+            else:
+                d.arc(S(60, 80, 110, 120), 200, 340, fill=neg, width=10 * s); d.arc(S(130, 80, 180, 120), 200, 340, fill=neg, width=10 * s)
+                d.chord(S(60, 120, 180, 200), 0, 180, fill=neg); d.chord(S(80, 160, 160, 200), 0, 180, fill=(240, 90, 110))
+        elif tipo == "fuego":
+            d.polygon(S(120, 0, 200, 110, 210, 170, 170, 230, 70, 230, 30, 170, 40, 100, 80, 120), fill=(255, 110, 40))
+            d.polygon(S(120, 90, 165, 160, 150, 220, 90, 220, 75, 170), fill=(255, 210, 70))
+        elif tipo == "ojos":
+            for x in (20, 125):
+                d.ellipse(S(x, 40, x + 95, 200), fill=(255, 255, 255), outline=neg, width=6 * s)
+                d.ellipse(S(x + 40, 100, x + 85, 160), fill=neg)
+        elif tipo == "dinero":
+            d.ellipse(S(30, 60, 210, 235), fill=(110, 180, 90)); d.polygon(S(80, 70, 160, 70, 140, 30, 100, 30), fill=(110, 180, 90))
+            d.text((92 * s, 95 * s), "$", font=anton(110 * s), fill=(255, 255, 255))
+        elif tipo == "alerta":
+            d.polygon(S(120, 10, 235, 220, 5, 220), fill=(240, 60, 70)); d.polygon(S(120, 45, 205, 205, 35, 205), fill=(255, 220, 80))
+            d.text((100 * s, 70 * s), "!", font=anton(120 * s), fill=(40, 30, 30))
+        elif tipo == "corazon":
+            d.ellipse(S(10, 30, 125, 145), fill=(255, 80, 120)); d.ellipse(S(115, 30, 230, 145), fill=(255, 80, 120))
+            d.polygon(S(15, 110, 225, 110, 120, 230), fill=(255, 80, 120))
+    return suave(240, 240, dib)
+
+
+ADORNOS = {}
+CICLO_PEGATINAS = ["sorpresa", "ojos", "fuego", "alerta", "risa", "dinero", "corazon"]
+
+
+def preparar_adornos():
+    for t in CICLO_PEGATINAS:
+        ADORNOS[t] = pegatina(t)
+    m = mascota_amable()
+    ADORNOS["mascota"] = m.resize((m.width // 6, m.height // 6), Image.LANCZOS)
+    f = anton(58)
+    for clave, txt, col in (("gancho", GANCHO, COLOR_MARCO), ("espera", "👀 ESPERA AL FINAL".replace("👀 ", ""), (255, 255, 255)),
+                            ("ojo", "OJO A ESTO", (255, 255, 255))):
+        tmp = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
+        tw = int(tmp.textlength(txt, font=f))
+        im = Image.new("RGBA", (tw + 70, 96), (0, 0, 0, 0))
+        dd = ImageDraw.Draw(im)
+        fondo = (20, 20, 30, 225) if clave == "gancho" else ((230, 40, 70, 240) if clave == "ojo" else (40, 40, 60, 235))
+        dd.rounded_rectangle((0, 0, im.width - 1, 95), radius=48, fill=fondo, outline=col + (255,), width=5)
+        dd.text((35, 14), txt, font=f, fill=col + (255,))
+        ADORNOS[clave] = im
+
+
+def adornos(fr, tg, total, kb, tl, beat):
+    d = ImageDraw.Draw(fr)
+    # marco de neón que late
+    a = int(120 + 100 * (0.5 + 0.5 * math.sin(tg * 4)))
+    marco = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(marco).rounded_rectangle((10, 10, W - 11, H - 11), radius=40, outline=COLOR_MARCO + (a,), width=10)
+    fr.alpha_composite(marco)
+    # barra de progreso
+    d.rounded_rectangle((30, 30, W - 30, 44), radius=7, fill=(0, 0, 0, 140))
+    d.rounded_rectangle((30, 30, 30 + (W - 60) * min(1, tg / total), 44), radius=7, fill=COLOR_MARCO)
+    # titular gancho fijo arriba (late un poco)
+    g = ADORNOS["gancho"]
+    k = 1 + 0.03 * math.sin(tg * 5)
+    pegar(fr, escalar(g, k), W / 2, 120)
+    # «espera al final» al principio y «ojo a esto» antes del giro
+    if 0.6 < tg < 4.0:
+        pegar(fr, escalar(ADORNOS["espera"], max(0.05, back((tg - 0.6) / 0.3))), W / 2, 222)
+    if GIRO is not None and kb == GIRO and tl < 2.2:
+        pegar(fr, escalar(ADORNOS["ojo"], max(0.05, back(tl / 0.3)) * (1 + 0.05 * math.sin(tl * 12))), W / 2, 222)
+    # pegatina que salta en cada escena (alternando lado), con bamboleo
+    tipo = beat.get("pegatina") or CICLO_PEGATINAS[kb % len(CICLO_PEGATINAS)]
+    if tipo and 0.25 < tl < beat["dur"] - 0.15:
+        u = back((tl - 0.25) / 0.35)
+        st = ADORNOS[tipo].rotate(12 * math.sin(tl * 6), resample=Image.BICUBIC, expand=True)
+        st = escalar(st, 0.75 * max(0.05, u))
+        x = 150 if kb % 2 == 0 else W - 190
+        pegar(fr, st, x, 560 + 15 * math.sin(tl * 3))
+    # destellos que suben
+    for k_ in range(10):
+        x = (k_ * 211 + tg * 40) % W
+        y = H - ((k_ * 137 + tg * 90) % (H - 300)) - 100
+        r = 4 + (k_ % 3) * 2
+        d.ellipse((x - r, y - r, x + r, y + r), fill=COLOR_MARCO + (170,))
+    # mini mascota en la esquina, botando mientras se habla
+    m = ADORNOS["mascota"]
+    pegar(fr, m, 110, 1360 - abs(math.sin(tg * 6)) * 14)
+
+
 # ------------------------------------------------------------- guion (datos verificados, ver FUENTES.md)
 A = {}
 
@@ -504,6 +603,9 @@ BEATS = [
 ]
 
 
+GIRO = 14   # «Y lo más increíble…» (la cola frente al hueco)
+
+
 def render():
     os.makedirs(SALIDA, exist_ok=True)
     slug = os.path.basename(SALIDA)
@@ -536,6 +638,7 @@ def render():
             fsrt.write(f"{k}\n{fmt(a_)} --> {fmt(b_)}\n{b['say']}\n\n")
     print(f"[{slug}] ilustraciones…", flush=True)
     assets()
+    preparar_adornos()
     muestra = "--muestra" in sys.argv
     mp4 = os.path.join(SALIDA, "mudo.mp4")
     ff = None if muestra else subprocess.Popen(
@@ -565,6 +668,7 @@ def render():
             g0 = (k_act // 4) * 4
             cap = PL.caption([p for _, p in pts[g0:g0 + 4]], k_act - g0, (tg - pts[k_act][0]) / 0.18)
             escena.alpha_composite(cap, (0, 1440))
+        adornos(escena, tg, total, kb, tl, b)
         arr = np.asarray(escena.convert("RGB"))
         if tl < 0.08 and kb > 0:  # destello suave en el corte
             arr = (arr.astype(np.int16) * 0.6 + 255 * 0.4).astype(np.uint8)

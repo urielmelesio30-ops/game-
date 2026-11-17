@@ -390,6 +390,41 @@ def destello_luz(arr, tg):
     return (arr * (1 - banda[..., None]) + col * banda[..., None]).astype(np.uint8)
 
 
+PIXEL = os.environ.get("PIXEL", "1") == "1"   # estilo pixel art del canal (por defecto)
+PW, PH, PESC = 360, 640, 3
+
+
+def pixelar(arr):
+    """Reduce a 360x640 con colores posterizados (paleta retro estable entre fotogramas)."""
+    from PIL import ImageOps
+    im = Image.fromarray(arr).resize((PW, PH), Image.BOX)
+    return ImageOps.posterize(im, 3).convert("RGBA")
+
+
+def subtitulo_pixel(palabras, k_actual):
+    """Subtítulo palabra a palabra con fuente pixel; la última palabra en amarillo."""
+    import render as R
+    f = R.fuente("texto", 30)
+    piezas = [R.txt_img(p.upper(), f, "amarillo" if i == k_actual else "blanco", "negro", contorno=True)
+              for i, p in enumerate(palabras[:k_actual + 1])]
+    lineas, act, ancho = [], [], 0
+    for p in piezas:
+        if act and ancho + p.width + 6 > R.ANCHO:
+            lineas.append(act); act, ancho = [], 0
+        act.append(p); ancho += p.width + 6
+    lineas.append(act)
+    alto = sum(max(p.height for p in l) for l in lineas) + 2 * (len(lineas) - 1)
+    out = Image.new("RGBA", (PW, alto), (0, 0, 0, 0))
+    y = 0
+    for l in lineas:
+        w = sum(p.width for p in l) + 6 * (len(l) - 1)
+        x = (PW - w) // 2
+        for p in l:
+            out.alpha_composite(p, (x, y)); x += p.width + 6
+        y += max(p.height for p in l) + 2
+    return out
+
+
 def momento_clave(beat, tl):
     """(temblor_px, destello) si estamos justo en el efecto de sonido de la escena."""
     if "sfx" not in beat:
@@ -845,22 +880,33 @@ def render():
         escena.alpha_composite(VINETA)
         pts = palabras_t[kb]
         k_act = max([i for i, (t0, _) in enumerate(pts) if tg >= t0], default=-1)
-        if k_act >= 0:
+        if k_act >= 0 and not PIXEL:
             g0 = (k_act // 4) * 4
             cap = PL.caption([p for _, p in pts[g0:g0 + 4]], k_act - g0, (tg - pts[k_act][0]) / 0.18)
             escena.alpha_composite(cap, (0, 1440))
         adornos(escena, tg, total, kb, tl, b)
         arr = np.asarray(escena.convert("RGB"))
         arr = destello_luz(arr, tg)
+        if PIXEL:
+            peq = pixelar(arr)
+            if k_act >= 0:
+                g0 = (k_act // 3) * 3
+                cap = subtitulo_pixel([p for _, p in pts[g0:g0 + 3]], k_act - g0)
+                salto = 2 if (tg - pts[k_act][0]) < 0.07 else 0
+                peq.alpha_composite(cap, (0, 500 - cap.height // 2 + salto))
+            arr = np.asarray(peq.convert("RGB")).repeat(PESC, 0).repeat(PESC, 1)
         temblor, flash = momento_clave(b, tl)
         if temblor:
             rng_t = np.random.default_rng(fi)
-            arr = np.roll(arr, (int(rng_t.integers(-temblor, temblor + 1)), int(rng_t.integers(-temblor, temblor + 1))), (0, 1))
+            paso = PESC if PIXEL else 1
+            arr = np.roll(arr, (int(rng_t.integers(-temblor, temblor + 1)) // paso * paso,
+                                int(rng_t.integers(-temblor, temblor + 1)) // paso * paso), (0, 1))
         if flash:
             arr = (arr.astype(np.float32) * (1 - flash) + 255 * flash).astype(np.uint8)
-        arr = np.clip(arr.astype(np.int16) + GRANO[fi % len(GRANO)][..., None], 0, 255).astype(np.uint8)
+        if not PIXEL:
+            arr = np.clip(arr.astype(np.int16) + GRANO[fi % len(GRANO)][..., None], 0, 255).astype(np.uint8)
         if muestra:
-            Image.fromarray(arr).resize((270, 480)).save(os.path.join(SALIDA, f"muestra_{kb:02d}.png"))
+            Image.fromarray(arr).resize((360, 640), Image.NEAREST).save(os.path.join(SALIDA, f"muestra_{kb:02d}.png"))
         else:
             ff.stdin.write(arr.tobytes())
         if fi % (FPS * 10) == 0 and not muestra:

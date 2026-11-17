@@ -15,72 +15,103 @@ Hm.SALIDA = os.path.join(Hm.PL.SALIDA, "16-torre-eiffel-estafa")
 
 
 def torre(h=1100):
-    """Torre Eiffel (monumento de dominio público) dibujada por código: cuatro patas con
-    el gran arco, dos plataformas, parte alta y antena; celosía de hierro y sombreado."""
-    w = int(h * 0.62)
+    """Torre Eiffel (monumento de dominio público, 1889) dibujada por código.
+    Silueta con las cuatro patas y el gran arco, dos plataformas, friso de arquitos,
+    pilares de piedra, celosía por tramos que sigue la curva, vigas de borde y degradado."""
+    w = int(h * 0.64)
     cx = w / 2
-    BR, BR_OSC, BR_CLA = (139, 98, 70), (104, 70, 50), (172, 128, 92)
 
     def perfil(y):
-        """Semiancho exterior de la torre a la altura y (0 = arriba, h = base)."""
         v = y / h
         if v < 0.06:
             return w * 0.02
-        if v < 0.45:   # parte alta: curva que se abre hacia abajo
+        if v < 0.45:
             u = (v - 0.06) / 0.39
             return w * (0.025 + 0.11 * u ** 1.6)
-        if v < 0.70:   # entre plataformas
+        if v < 0.70:
             u = (v - 0.45) / 0.25
             return w * (0.15 + 0.13 * u ** 1.3)
-        u = (v - 0.70) / 0.30   # patas
-        return w * (0.29 + 0.21 * u ** 1.25)
+        u = (v - 0.70) / 0.30
+        return w * (0.29 + 0.20 * u ** 1.25)
+
+    def color(y, osc=0.0):
+        v = y / h
+        base = np.array((176, 128, 92)) * (1 - v) + np.array((118, 82, 58)) * v
+        return tuple(int(c * (1 - osc)) for c in base)
 
     def dib(d, s):
         def S(*v):
             return [x * s for x in v]
-        ys = [h * k / 200 for k in range(201)]
-        izq = [(cx - perfil(y), y) for y in ys]
-        der = [(cx + perfil(y), y) for y in reversed(ys)]
-        d.polygon(S(*sum(izq + der, ())), fill=BR)
-        # sombra en la mitad derecha
-        d.polygon(S(*sum([(cx, y) for y in ys] + der, ())), fill=BR_OSC)
-        # gran arco de la base (hueco entre las patas)
-        d.chord(S(cx - w * 0.27, h * 0.80, cx + w * 0.27, h * 1.24), 180, 360, fill=(0, 0, 0, 0))
-        # hueco entre plataformas
-        d.chord(S(cx - w * 0.12, h * 0.585, cx + w * 0.12, h * 0.76), 180, 360, fill=(0, 0, 0, 0))
-        d.rectangle(S(cx - w * 0.12, h * 0.67, cx + w * 0.12, h * 0.70), fill=(0, 0, 0, 0))
-        # plataformas
-        for yp, aw, gr in ((0.70, 0.36, 0.035), (0.45, 0.19, 0.025), (0.06, 0.05, 0.02)):
-            d.rectangle(S(cx - w * aw, h * yp - h * gr, cx + w * aw, h * yp), fill=BR_CLA)
-            d.rectangle(S(cx - w * aw, h * yp, cx + w * aw, h * yp + h * 0.008), fill=BR_OSC)
-            for xx in range(int(cx - w * aw) + 8, int(cx + w * aw) - 4, 14):
-                d.line(S(xx, h * yp - h * gr, xx, h * yp), fill=BR_OSC, width=2 * s)
-        # antena
-        d.rectangle(S(cx - 3, 0, cx + 3, h * 0.06), fill=BR_OSC)
-        d.ellipse(S(cx - 7, -2, cx + 7, 12), fill=(255, 220, 140))
+        # cuerpo con degradado vertical y sombra en la mitad derecha
+        for y0 in range(0, h, 4):
+            pw = perfil(y0 + 2)
+            d.rectangle(S(cx - pw, y0, cx, y0 + 4), fill=color(y0))
+            d.rectangle(S(cx, y0, cx + pw, y0 + 4), fill=color(y0, 0.22))
+        # celosía por tramos: montantes y aspas que siguen la curva
+        tramos = [h * k / 60 for k in range(4, 61)]
+        for y0, y1 in zip(tramos[:-1], tramos[1:]):
+            l0, l1 = perfil(y0), perfil(y1)
+            n = max(2, int(2 * l1 / 34))
+            for i in range(n + 1):
+                xa = cx - l0 + 2 * l0 * i / n
+                xb = cx - l1 + 2 * l1 * i / n
+                d.line(S(xa, y0, xb, y1), fill=color(y0, 0.45), width=2 * s)
+                if i < n:
+                    xa2 = cx - l0 + 2 * l0 * (i + 1) / n
+                    xb2 = cx - l1 + 2 * l1 * (i + 1) / n
+                    d.line(S(xa, y0, xb2, y1), fill=color(y0, 0.35), width=1 * s)
+                    d.line(S(xa2, y0, xb, y1), fill=color(y0, 0.35), width=1 * s)
+            d.line(S(cx - l0, y0, cx + l0, y0), fill=color(y0, 0.4), width=1 * s)
+        # vigas de los bordes (luz desde la izquierda)
+        ys = [h * k / 120 for k in range(7, 121)]
+        for y0, y1 in zip(ys[:-1], ys[1:]):
+            d.line(S(cx - perfil(y0), y0, cx - perfil(y1), y1), fill=(222, 176, 128), width=7 * s)
+            d.line(S(cx + perfil(y0), y0, cx + perfil(y1), y1), fill=color(y0, 0.5), width=7 * s)
+        # huecos: gran arco de la base y arco entre plataformas
+        d.chord(S(cx - w * 0.26, h * 0.80, cx + w * 0.26, h * 1.24), 180, 360, fill=(0, 0, 0, 0))
+        d.arc(S(cx - w * 0.26, h * 0.80, cx + w * 0.26, h * 1.24), 180, 360, fill=(222, 176, 128), width=8 * s)
+        d.chord(S(cx - w * 0.11, h * 0.585, cx + w * 0.11, h * 0.76), 180, 360, fill=(0, 0, 0, 0))
+        d.rectangle(S(cx - w * 0.11, h * 0.67, cx + w * 0.11, h * 0.70), fill=(0, 0, 0, 0))
+        # rendija de la parte alta (se ve el cielo entre las caras)
+        d.polygon(S(cx - 3, h * 0.30, cx + 3, h * 0.30, cx + 10, h * 0.43, cx - 10, h * 0.43), fill=(0, 0, 0, 0))
+        # plataformas con barandilla y friso de arquitos bajo la primera
+        for yp, aw, gr in ((0.70, 0.37, 0.04), (0.45, 0.20, 0.028), (0.06, 0.055, 0.022)):
+            d.rectangle(S(cx - w * aw, h * yp - h * gr, cx + w * aw, h * yp), fill=(196, 148, 104))
+            d.rectangle(S(cx - w * aw, h * yp - h * gr, cx + w * aw, h * yp - h * gr + 5), fill=(230, 190, 140))
+            d.rectangle(S(cx - w * aw, h * yp, cx + w * aw, h * yp + h * 0.009), fill=(96, 64, 44))
+            for xx in range(int(cx - w * aw) + 8, int(cx + w * aw) - 4, 12):
+                d.line(S(xx, h * yp - h * gr + 6, xx, h * yp), fill=(130, 90, 62), width=2 * s)
+        aw = 0.29
+        nx = 9
+        for i in range(nx):
+            xa = cx - w * aw + 2 * w * aw * i / nx
+            xb = xa + 2 * w * aw / nx
+            d.arc(S(xa, h * 0.712, xb, h * 0.76), 180, 360, fill=(222, 176, 128), width=3 * s)
+        # pilares de piedra bajo cada pata
+        for lado in (-1, 1):
+            x = cx + lado * w * 0.40
+            d.rectangle(S(x - w * 0.09, h - h * 0.022, x + w * 0.09, h), fill=(150, 146, 140))
+            d.rectangle(S(x - w * 0.09, h - h * 0.022, x + w * 0.09, h - h * 0.016), fill=(190, 186, 180))
+        # antena y faro
+        d.rectangle(S(cx - 3, 0, cx + 3, h * 0.06), fill=(96, 64, 44))
+        d.ellipse(S(cx - 8, h * 0.035, cx + 8, h * 0.055), fill=(255, 230, 150))
 
-    im = suave(w, h, dib)
-    # celosía: aspas en X recortadas a la silueta
-    rejilla = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    rd = ImageDraw.Draw(rejilla)
-    paso = 22
-    for k in range(-h, w + h, paso):
-        rd.line((k, 0, k + h, h), fill=(80, 54, 38, 150), width=2)
-        rd.line((k, 0, k - h, h), fill=(80, 54, 38, 150), width=2)
-    for y in range(int(h * 0.06), h, 26):
-        rd.line((0, y, w, y), fill=(80, 54, 38, 110), width=2)
-    alfa = im.getchannel("A")
-    rejilla.putalpha(Image.fromarray(np.minimum(np.array(rejilla.getchannel("A")), np.array(alfa))))
-    im.alpha_composite(rejilla)
-    # bordes iluminados (luz desde la izquierda)
-    borde = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    bd = ImageDraw.Draw(borde)
-    for y in range(int(h * 0.06), h, 2):
-        x = cx - perfil(y)
-        bd.line((x, y, x + 4, y), fill=(210, 160, 110, 200))
-    borde.putalpha(Image.fromarray(np.minimum(np.array(borde.getchannel("A")), np.array(alfa))))
-    im.alpha_composite(borde)
-    return im
+    return suave(w, h, dib)
+
+
+def faro(fr, cx, top_y, t, alcance=900):
+    """Haz giratorio del faro de la cima barriendo el cielo."""
+    capa = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(capa)
+    a = math.sin(t * 1.4) * 1.2
+    for sgn in (1, -1):
+        ang = a if sgn == 1 else a + math.pi
+        dx, dy = math.cos(ang), -abs(math.sin(ang)) * 0.25 - 0.05
+        ex, ey = cx + dx * alcance, top_y + dy * alcance
+        nx, ny = -dy * 0.12 * alcance, dx * 0.12 * alcance
+        d.polygon([(cx, top_y), (ex + nx, ey + ny), (ex - nx, ey - ny)], fill=(255, 240, 190, 55 if sgn == 1 else 35))
+    fr.alpha_composite(capa)
+    ImageDraw.Draw(fr).ellipse((cx - 14, top_y - 14, cx + 14, top_y + 14), fill=(255, 245, 210))
 
 
 def centelleo(fr, cx, cy, im, t, n=26, semilla=1):
@@ -189,6 +220,7 @@ POISSON = dict(ropa=(70, 90, 70), pelo=(120, 90, 60))
 # ------------------------------------------------------------- escenas
 def e_vendida(fr, d, tl, dur):
     fr.alpha_composite(A["cielo"])
+    faro(fr, W / 2, 760 - A["torre"].height / 2 + 50, tl)
     pegar(fr, A["torre"], W / 2, 760)
     centelleo(fr, W / 2, 760, A["torre"], tl)
     if tl > dur * 0.5:
@@ -323,6 +355,7 @@ def e_verguenza(fr, d, tl, dur):
 
 def e_otravez(fr, d, tl, dur):
     fr.alpha_composite(A["cielo"])
+    faro(fr, W / 2, 760 - A["torre"].height / 2 + 50, tl)
     pegar(fr, A["torre"], W / 2, 760)
     centelleo(fr, W / 2, 760, A["torre"], tl, semilla=3)
     pegar(fr, escalar(texto_grande("OTRA VEZ", (255, 214, 80), 200), max(0.05, back(tl / 0.4))), W / 2, 420)

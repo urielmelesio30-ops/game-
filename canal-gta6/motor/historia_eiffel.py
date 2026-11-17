@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Historia real animada en 2D: el hombre que «vendió» la Torre Eiffel (1925)."""
 import math, os, sys
+import numpy as np
 from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -14,25 +15,93 @@ Hm.SALIDA = os.path.join(Hm.PL.SALIDA, "16-torre-eiffel-estafa")
 
 
 def torre(h=1100):
-    """Torre de hierro de celosía (silueta propia; el monumento es de dominio público)."""
+    """Torre Eiffel (monumento de dominio público) dibujada por código: cuatro patas con
+    el gran arco, dos plataformas, parte alta y antena; celosía de hierro y sombreado."""
     w = int(h * 0.62)
+    cx = w / 2
+    BR, BR_OSC, BR_CLA = (139, 98, 70), (104, 70, 50), (172, 128, 92)
+
+    def perfil(y):
+        """Semiancho exterior de la torre a la altura y (0 = arriba, h = base)."""
+        v = y / h
+        if v < 0.06:
+            return w * 0.02
+        if v < 0.45:   # parte alta: curva que se abre hacia abajo
+            u = (v - 0.06) / 0.39
+            return w * (0.025 + 0.11 * u ** 1.6)
+        if v < 0.70:   # entre plataformas
+            u = (v - 0.45) / 0.25
+            return w * (0.15 + 0.13 * u ** 1.3)
+        u = (v - 0.70) / 0.30   # patas
+        return w * (0.29 + 0.21 * u ** 1.25)
 
     def dib(d, s):
         def S(*v):
             return [x * s for x in v]
-        col, col2 = (92, 82, 78), (120, 108, 100)
-        cx = w / 2
-        pts_i = [(cx - w * 0.48, h), (cx - w * 0.30, h * 0.72), (cx - w * 0.14, h * 0.45), (cx - w * 0.05, h * 0.12), (cx, 0)]
-        pts_d = [(2 * cx - x, y) for x, y in pts_i]
-        d.polygon(S(*sum(pts_i, ()), *sum(reversed(pts_d), ())), fill=col)
-        d.chord(S(cx - w * 0.26, h * 0.80, cx + w * 0.26, h * 1.12), 180, 360, fill=(232, 210, 170, 0) if False else (200, 214, 236))
-        for y, ww in ((h * 0.72, 0.36), (h * 0.45, 0.20)):
-            d.rectangle(S(cx - w * ww, y - 14, cx + w * ww, y + 14), fill=col2)
-        for k in range(14):
-            y = h * k / 14
-            d.line(S(cx - w * 0.5 * (1 - k / 14) ** 1.3, y, cx + w * 0.5 * (1 - k / 14) ** 1.3, y + h / 14), fill=col2, width=3 * s)
-            d.line(S(cx + w * 0.5 * (1 - k / 14) ** 1.3, y, cx - w * 0.5 * (1 - k / 14) ** 1.3, y + h / 14), fill=col2, width=3 * s)
-    return suave(w, h, dib)
+        ys = [h * k / 200 for k in range(201)]
+        izq = [(cx - perfil(y), y) for y in ys]
+        der = [(cx + perfil(y), y) for y in reversed(ys)]
+        d.polygon(S(*sum(izq + der, ())), fill=BR)
+        # sombra en la mitad derecha
+        d.polygon(S(*sum([(cx, y) for y in ys] + der, ())), fill=BR_OSC)
+        # gran arco de la base (hueco entre las patas)
+        d.chord(S(cx - w * 0.27, h * 0.80, cx + w * 0.27, h * 1.24), 180, 360, fill=(0, 0, 0, 0))
+        # hueco entre plataformas
+        d.chord(S(cx - w * 0.12, h * 0.585, cx + w * 0.12, h * 0.76), 180, 360, fill=(0, 0, 0, 0))
+        d.rectangle(S(cx - w * 0.12, h * 0.67, cx + w * 0.12, h * 0.70), fill=(0, 0, 0, 0))
+        # plataformas
+        for yp, aw, gr in ((0.70, 0.36, 0.035), (0.45, 0.19, 0.025), (0.06, 0.05, 0.02)):
+            d.rectangle(S(cx - w * aw, h * yp - h * gr, cx + w * aw, h * yp), fill=BR_CLA)
+            d.rectangle(S(cx - w * aw, h * yp, cx + w * aw, h * yp + h * 0.008), fill=BR_OSC)
+            for xx in range(int(cx - w * aw) + 8, int(cx + w * aw) - 4, 14):
+                d.line(S(xx, h * yp - h * gr, xx, h * yp), fill=BR_OSC, width=2 * s)
+        # antena
+        d.rectangle(S(cx - 3, 0, cx + 3, h * 0.06), fill=BR_OSC)
+        d.ellipse(S(cx - 7, -2, cx + 7, 12), fill=(255, 220, 140))
+
+    im = suave(w, h, dib)
+    # celosía: aspas en X recortadas a la silueta
+    rejilla = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    rd = ImageDraw.Draw(rejilla)
+    paso = 22
+    for k in range(-h, w + h, paso):
+        rd.line((k, 0, k + h, h), fill=(80, 54, 38, 150), width=2)
+        rd.line((k, 0, k - h, h), fill=(80, 54, 38, 150), width=2)
+    for y in range(int(h * 0.06), h, 26):
+        rd.line((0, y, w, y), fill=(80, 54, 38, 110), width=2)
+    alfa = im.getchannel("A")
+    rejilla.putalpha(Image.fromarray(np.minimum(np.array(rejilla.getchannel("A")), np.array(alfa))))
+    im.alpha_composite(rejilla)
+    # bordes iluminados (luz desde la izquierda)
+    borde = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(borde)
+    for y in range(int(h * 0.06), h, 2):
+        x = cx - perfil(y)
+        bd.line((x, y, x + 4, y), fill=(210, 160, 110, 200))
+    borde.putalpha(Image.fromarray(np.minimum(np.array(borde.getchannel("A")), np.array(alfa))))
+    im.alpha_composite(borde)
+    return im
+
+
+def centelleo(fr, cx, cy, im, t, n=26, semilla=1):
+    """Lucecitas que centellean sobre la torre, como de noche en París."""
+    rng = np.random.default_rng(semilla)
+    a = np.array(im.getchannel("A"))
+    ys, xs = np.nonzero(a > 200)
+    if len(xs) == 0:
+        return
+    d = ImageDraw.Draw(fr)
+    for i in range(n):
+        j = int(rng.integers(0, len(xs)))
+        fase = rng.uniform(0, 6.28)
+        b = 0.5 + 0.5 * math.sin(t * 9 + fase)
+        if b < 0.55:
+            continue
+        x = cx - im.width / 2 + xs[j]; y = cy - im.height / 2 + ys[j]
+        r = 3 + 7 * b
+        d.line((x - r * 2, y, x + r * 2, y), fill=(255, 245, 200), width=2)
+        d.line((x, y - r * 2, x, y + r * 2), fill=(255, 245, 200), width=2)
+        d.ellipse((x - r / 2, y - r / 2, x + r / 2, y + r / 2), fill=(255, 255, 230))
 
 
 def sello(txt, color=(210, 40, 50)):
@@ -121,6 +190,7 @@ POISSON = dict(ropa=(70, 90, 70), pelo=(120, 90, 60))
 def e_vendida(fr, d, tl, dur):
     fr.alpha_composite(A["cielo"])
     pegar(fr, A["torre"], W / 2, 760)
+    centelleo(fr, W / 2, 760, A["torre"], tl)
     if tl > dur * 0.5:
         u = back((tl - dur * 0.5) / 0.3)
         pegar(fr, escalar(sello("VENDIDA"), max(0.05, 2.2 - 1.2 * min(1, u))), W / 2, 700)
@@ -254,6 +324,7 @@ def e_verguenza(fr, d, tl, dur):
 def e_otravez(fr, d, tl, dur):
     fr.alpha_composite(A["cielo"])
     pegar(fr, A["torre"], W / 2, 760)
+    centelleo(fr, W / 2, 760, A["torre"], tl, semilla=3)
     pegar(fr, escalar(texto_grande("OTRA VEZ", (255, 214, 80), 200), max(0.05, back(tl / 0.4))), W / 2, 420)
 
 

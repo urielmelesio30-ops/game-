@@ -150,7 +150,7 @@ def s_hora(fr, d, tl, dur):
     feed(fr, d, W / 2 - 120, 820, tl * 1.4)
     hora = 22 + min(1.0, tl / dur) * 1.0
     hh, mm = int(hora), int((hora % 1) * 60)
-    pegar(fr, texto_grande(f"{hh:02d}:{mm:02d}", (255, 255, 255), 170), W / 2, 260)
+    pegar(fr, texto_grande(f"{hh:02d}:{mm:02d}", (255, 255, 255), 170), W / 2 + 230, 420)
 
 
 def s_razon(fr, d, tl, dur):

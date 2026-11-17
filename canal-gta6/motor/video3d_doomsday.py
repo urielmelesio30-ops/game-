@@ -24,6 +24,9 @@ RW, RH = 432, 768
 SLUG = "13-doomsday-6-cosas-3d"
 SALIDA = os.path.join(T.RAIZ, "salida", SLUG)
 PASO = 16  # distancia entre estaciones
+NUMEROS = True   # números 1..6 en las estaciones
+EXTRA = {}       # estaciones nuevas: {"nombre": {"construir": f(y, anim, ctx), "animar": f(ctx)}}
+EFECTOS = {"intro": "golpe", "villano": "golpe", "doom": "subida", "russo": "golpe", "portal": "boom"}
 
 BEATS = [
     dict(e="intro", say="Seis cosas que tienes que saber antes de ver Vengadores: Doomsday."),
@@ -108,7 +111,10 @@ def construir(tiempos):
         e = b["e"]
         foco(e, (0, y - 2.5, 8.5), (0, y + 1.5, 0.8), (1.0, 0.95, 0.85), 2200)
         punto((0, y + 3.5, 3), [(0.6, 0.2, 1.0), (0.2, 1.0, 0.4), (0.3, 0.5, 1.0)][i % 3], 300)
-        if 1 <= i <= 6:
+        if e in EXTRA:
+            EXTRA[e]["construir"](y, anim, dict(oro=oro, blanco=blanco, piedra=piedra, foco=foco, punto=punto))
+            continue
+        if NUMEROS and 1 <= i <= 6:
             num = T.texto3d(str(i), (-2.6, y + 1.0, 3.2), 1.3, oro, extr=0.15)
             anim.setdefault("numeros", []).append(num)
         if e == "intro":
@@ -217,6 +223,11 @@ def construir(tiempos):
         T.clave(cam, "location", (lado * 0.6, y - 6.0, 2.3), F(t0 + 0.6))
         T.clave(cam, "location", (-lado * 0.4, y - 4.6, 2.1), F(fin - 0.05))
         T.clave(mira, "location", (0, y + 1.5, 1.8), F(fin - 0.05))
+        if i + 1 < len(BEATS):   # transición: la cámara sube por encima de las piezas (no las atraviesa)
+            T.clave(cam, "location", (0, y + 4.0, 7.5), F(fin + 0.03))
+            T.clave(mira, "location", (0, y + PASO + 1.5, 1.7), F(fin + 0.03))
+        if e in EXTRA and "animar" in EXTRA[e]:
+            EXTRA[e]["animar"](dict(anim=anim, t0=t0, d=d, fin=fin, y=y, F=F, cam=cam, mira=mira, focos=focos))
         if e == "intro":
             s6 = anim["seis"]
             for k in range(0, int(fin * FPS) + 2, 6):
@@ -259,7 +270,7 @@ def construir(tiempos):
             T.clave(cam, "location", (0, y - 1.0, 2.8), F(fin - 0.05))  # la cámara entra en el portal
             T.clave(mira, "location", (0, y + 2.5, 2.8), F(fin - 0.05))
     # interpolación lineal en la rotación del aro y los portales (giro continuo)
-    for o in [anim["aro"]] + anim["aros"]:
+    for o in [anim[k] for k in ("aro",) if k in anim] + anim.get("aros", []) + anim.get("giran", []):
         for fc in o.animation_data.action.fcurves if hasattr(o.animation_data.action, "fcurves") else []:
             for kp in fc.keyframe_points:
                 kp.interpolation = "LINEAR"
@@ -293,7 +304,7 @@ def main():
     audio.sf.write(os.path.join(SALIDA, "voz.wav"), voz, audio.VOZ_SR)
     mus = audio.musica(total + 1, semilla=5, bpm=92, tono="D")
     for b, (t0, d) in zip(BEATS, tiempos):
-        ef = {"intro": "golpe", "villano": "golpe", "doom": "subida", "russo": "golpe", "portal": "boom"}.get(b["e"])
+        ef = EFECTOS.get(b["e"])
         s = audio.efecto(ef) if ef else audio.whoosh(len(b["e"]))
         te = t0 + (0.7 if b["e"] == "russo" else 0.2)
         i = int(te * audio.MUS_SR); j = min(len(mus), i + len(s)); mus[i:j] += s[:j - i] * (1.6 if ef else 0.8)

@@ -117,23 +117,25 @@ def clave_valor(sock, valor, frame):
 
 
 # ------------------------------------------------------------- escena
-def mascota_villana(base):
+def mascota_villana(base, capa=True, corona=True, ojos_color=(0.2, 1.0, 0.4)):
     """La tele del canal en 3D, con capa, corona y ojos verdes (personaje original)."""
     x, y, z = base
     crema = mat("crema", (0.85, 0.78, 0.62), rugoso=0.5)
     pantalla = mat("pantalla", (0.02, 0.03, 0.04), rugoso=0.2)
     negro = mat("negro", (0.01, 0.01, 0.01))
     oro = mat("oro", (0.9, 0.62, 0.15), rugoso=0.3, metal=0.9)
-    capa = mat("capa", (0.25, 0.08, 0.4), rugoso=0.8)
-    ojos = mat("ojos", (0.2, 1.0, 0.4), emision=6.0)
+    ojos = mat("ojos", ojos_color, emision=6.0)
     gris = mat("gris_ant", (0.5, 0.5, 0.55), metal=0.6, rugoso=0.4)
-    caja("capa", (x, y + 0.45, z + 0.9), (0.95, 0.05, 1.0), capa, rot=(math.radians(-8), 0, 0))
+    if capa:
+        caja("capa", (x, y + 0.45, z + 0.9), (0.95, 0.05, 1.0), mat("capa", (0.25, 0.08, 0.4), rugoso=0.8), rot=(math.radians(-8), 0, 0))
     caja("cuerpo", (x, y, z + 1.25), (0.8, 0.45, 0.65), crema)
     caja("pantalla", (x - 0.12, y - 0.46, z + 1.25), (0.55, 0.02, 0.5), pantalla)
     o_iz = caja("ojo_i", (x - 0.35, y - 0.49, z + 1.35), (0.13, 0.02, 0.045), ojos)
     o_de = caja("ojo_d", (x + 0.11, y - 0.49, z + 1.35), (0.13, 0.02, 0.045), ojos)
-    caja("ceja_i", (x - 0.35, y - 0.5, z + 1.47), (0.15, 0.02, 0.03), negro, rot=(0, math.radians(-15), 0))
-    caja("ceja_d", (x + 0.11, y - 0.5, z + 1.47), (0.15, 0.02, 0.03), negro, rot=(0, math.radians(15), 0))
+    if corona:
+        caja("ceja_i", (x - 0.35, y - 0.5, z + 1.47), (0.15, 0.02, 0.03), negro, rot=(0, math.radians(-15), 0))
+    if corona:
+        caja("ceja_d", (x + 0.11, y - 0.5, z + 1.47), (0.15, 0.02, 0.03), negro, rot=(0, math.radians(15), 0))
     caja("sonrisa", (x - 0.12, y - 0.49, z + 1.08), (0.18, 0.02, 0.03), ojos)
     for bx, c in ((0.62, (0.95, 0.75, 0.2)), (0.62, (0.3, 0.75, 0.95))):
         pass
@@ -145,11 +147,11 @@ def mascota_villana(base):
         cilindro((x + sx * 0.3, y, z + 2.15), 0.03, 0.6, gris, rot=(0, math.radians(sx * 25), 0))
         bpy.ops.mesh.primitive_uv_sphere_add(segments=8, ring_count=6, radius=0.08, location=(x + sx * 0.43, y, z + 2.43))
         bpy.context.object.data.materials.append(mat("punta", (0.95, 0.4, 0.6) if sx > 0 else (0.95, 0.8, 0.3), emision=2))
-    # corona
-    cilindro((x, y, z + 1.98), 0.35, 0.16, oro, lados=10)
-    for k in range(5):
-        a = k * 2 * math.pi / 5
-        cono((x + math.cos(a) * 0.3, y + math.sin(a) * 0.3, z + 2.15), 0.09, 0.0, 0.25, oro, lados=4)
+    if corona:
+        cilindro((x, y, z + 1.98), 0.35, 0.16, oro, lados=10)
+        for k in range(5):
+            a = k * 2 * math.pi / 5
+            cono((x + math.cos(a) * 0.3, y + math.sin(a) * 0.3, z + 2.15), 0.09, 0.0, 0.25, oro, lados=4)
     # patas
     for sx in (-0.4, 0.4):
         caja("pata", (x + sx, y, z + 0.3), (0.08, 0.08, 0.3), negro)

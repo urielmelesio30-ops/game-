@@ -107,17 +107,30 @@ def jugador(pos, ang, camiseta, pantalon, piel=(236, 196, 160), pelo=(40, 30, 26
     gor = esfera((0, -0.02, 1.84), 0.172, mpe, root); gor.scale = (1, 1, 0.75)
     cil((0, 0, 1.6), 0.07, 0.1, mpi, root)                       # cuello
     partes = {}
+    mj = mat("junta" + str(piel), tuple(int(v * 0.82) for v in piel))      # bolas de las articulaciones
+    esfera((0, 0, 1.03), 0.2, mj, root)                                       # cintura
     for lado, sx in (("izq", -1), ("der", 1)):
+        # brazo: hombro → brazo → codo → antebrazo → mano
         hombro = vacio((sx * 0.31, 0, 1.5), root)
-        cil((0, 0, -0.3), 0.07, 0.6, mc if False else mpi, hombro)
-        cil((0, 0, -0.1), 0.085, 0.22, mc, hombro)                # manga
-        esfera((0, 0, -0.62), 0.075, mpi, hombro)
-        partes["brazo_" + lado] = hombro
+        esfera((0, 0, 0), 0.095, mc, hombro)
+        cil((0, 0, -0.08), 0.085, 0.16, mc, hombro)                      # manga
+        cil((0, 0, -0.17), 0.062, 0.3, mpi, hombro)                      # brazo
+        codo = vacio((0, 0, -0.32), hombro)
+        esfera((0, 0, 0), 0.07, mj, codo)
+        cil((0, 0, -0.14), 0.055, 0.26, mpi, codo)                       # antebrazo
+        esfera((0, 0, -0.3), 0.068, mpi, codo)                           # mano
+        partes["brazo_" + lado], partes["codo_" + lado] = hombro, codo
+        # pierna: cadera → muslo → rodilla → espinilla → bota
         cadera = vacio((sx * 0.12, 0, 0.85), root)
-        cil((0, 0, -0.2), 0.1, 0.4, mp, cadera)
-        cil((0, 0, -0.55), 0.075, 0.45, mpi, cadera)
-        bota = caja((0, 0.06, -0.82), (0.07, 0.14, 0.05), mat("bota", (30, 30, 36)), cadera)
-        partes["pierna_" + lado] = cadera
+        esfera((0, 0, 0), 0.105, mp, cadera)
+        cil((0, 0, -0.17), 0.095, 0.3, mp, cadera)                       # pantalón
+        cil((0, 0, -0.3), 0.075, 0.12, mpi, cadera)                      # muslo
+        rodilla = vacio((0, 0, -0.42), cadera)
+        esfera((0, 0, 0), 0.078, mj, rodilla)
+        cil((0, 0, -0.2), 0.065, 0.36, mpi, rodilla)                     # espinilla
+        cil((0, 0, -0.27), 0.07, 0.14, mat("media", (245, 245, 245)), rodilla)
+        caja((0, 0.06, -0.4), (0.07, 0.14, 0.05), mat("bota", (30, 30, 36)), rodilla)
+        partes["pierna_" + lado], partes["rodilla_" + lado] = cadera, rodilla
     partes["root"] = root
     return partes
 
@@ -220,6 +233,11 @@ def animar(E, T, total):
             clave(br, "rotation_euler", (math.radians(200), 0, 0), F(t0 + t_lanz))
             clave(br, "rotation_euler", (math.radians(110), 0, 0), F(t0 + t_lanz + 0.18))
             clave(br, "rotation_euler", (math.radians(20), 0, 0), F(t0 + t_lanz + 0.9))
+            cd = s["codo_" + lado]
+            clave(cd, "rotation_euler", (math.radians(15), 0, 0), F(t0 - 0.05))
+            clave(cd, "rotation_euler", (math.radians(95), 0, 0), F(t0 + t_lanz))
+            clave(cd, "rotation_euler", (math.radians(5), 0, 0), F(t0 + t_lanz + 0.18))
+            clave(cd, "rotation_euler", (math.radians(15), 0, 0), F(t0 + t_lanz + 0.9))
         p0 = np.array((-15.6, -9, 2.3))
         mano = np.array((-15.45, -9.15, 2.45))
         tramos = [(mano, np.array(desvio), 2.2), (np.array(desvio), np.array(destino), 0.6)] if desvio else [(mano, np.array(destino), 3.2)]
@@ -355,7 +373,7 @@ def animar_jugadores(E, T, total):
                                     (t0(4) + 1.4, (-2.2, -3.8)), (t1(5), (-0.5, -1.2)), (t0(6), (0, -0.9)), (t_gol - 0.4, (-0.3, -0.9)), (t_gol, (1.2, -0.9)), (total, (1.2, -0.9))]),
                   foco=(-6, -8), estirada=[(t_fin - 0.35, 1, t0(3)), (t_gol - 0.3, -1, t1(6))]))
     for j in J:
-        limpiar_anim(j["p"], conservar=("brazo_izq", "brazo_der") if j["p"] is sac else ())
+        limpiar_anim(j["p"], conservar=("brazo_izq", "brazo_der", "codo_izq", "codo_der") if j["p"] is sac else ())
     n = int(total * FPS) + 1
     for j in J:
         P = j["p"]
@@ -397,6 +415,16 @@ def animar_jugadores(E, T, total):
             pierna = math.radians(38) * amp * math.sin(fase)
             P["pierna_izq"].rotation_euler = (pierna, 0, 0); P["pierna_izq"].keyframe_insert("rotation_euler", frame=f)
             P["pierna_der"].rotation_euler = (-pierna, 0, 0); P["pierna_der"].keyframe_insert("rotation_euler", frame=f)
+            flex = 0.0
+            for (a_s, b_s, h_s) in j.get("salto", []):
+                if a_s - 0.15 <= t <= b_s:
+                    flex = 50
+            ri = -math.radians(8 + flex + 75 * amp * max(0.0, math.cos(fase)))
+            rd = -math.radians(8 + flex + 75 * amp * max(0.0, -math.cos(fase)))
+            if tilt:
+                ri = rd = -math.radians(20)
+            P["rodilla_izq"].rotation_euler = (ri, 0, 0); P["rodilla_izq"].keyframe_insert("rotation_euler", frame=f)
+            P["rodilla_der"].rotation_euler = (rd, 0, 0); P["rodilla_der"].keyframe_insert("rotation_euler", frame=f)
             sb = j.get("sin_brazos")
             if sb and sb[0] <= t <= sb[1] and not celebra:
                 continue
@@ -410,6 +438,9 @@ def animar_jugadores(E, T, total):
                 bi, bd = (-brazo, 0, math.radians(6)), (brazo, 0, math.radians(-6))
             P["brazo_izq"].rotation_euler = bi; P["brazo_izq"].keyframe_insert("rotation_euler", frame=f)
             P["brazo_der"].rotation_euler = bd; P["brazo_der"].keyframe_insert("rotation_euler", frame=f)
+            codo = math.radians(25 if celebra else (5 if tilt else 18 + 70 * amp))
+            for lado_ in ("izq", "der"):
+                P["codo_" + lado_].rotation_euler = (codo, 0, 0); P["codo_" + lado_].keyframe_insert("rotation_euler", frame=f)
 
 
 # ------------------------------------------------------------- montaje 2D (texto, marcador, etiquetas)

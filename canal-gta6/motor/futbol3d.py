@@ -276,6 +276,7 @@ def animar(E, T, total):
     clave(b, "location", (-15.6, -9, 2.3), F(t6))
     cabeza = (-3.2, -6.5, 2.0)
     t_gol = saque(t6 + 0.3, (1.6, 0.6, 1.0), desvio=cabeza, t_vuelo=1.4)
+    E["t_fin"], E["t_gol"], E["t_cabeza"] = t_fin, t_gol, t6 + 0.3 + 0.45 + 1.4 * 0.75
     clave(comp["root"], "location", (-3.2, -6.5, 0), F(t6 + 1.1))
     clave(comp["root"], "location", (-3.2, -6.5, 0.45), F(t6 + 1.75))
     clave(comp["root"], "location", (-3.2, -6.5, 0), F(t6 + 2.1))
@@ -304,6 +305,111 @@ def animar(E, T, total):
         b_ = g[i_]
         camara(b_["t0"], *a_)
         camara(b_["t0"] + b_["dur"] - 0.22, *z_)
+
+
+# ------------------------------------------------------------- movimiento de los jugadores (carrera, respiración, porterías, celebración)
+def ruta(pts):
+    def f(t):
+        if t <= pts[0][0]:
+            return pts[0][1]
+        for (ta, pa), (tb, pb) in zip(pts, pts[1:]):
+            if t <= tb:
+                u = (t - ta) / max(1e-6, tb - ta)
+                u = u * u * (3 - 2 * u)
+                return (pa[0] + (pb[0] - pa[0]) * u, pa[1] + (pb[1] - pa[1]) * u)
+        return pts[-1][1]
+    return f
+
+
+def limpiar_anim(partes, conservar=()):
+    for k, o in partes.items():
+        if k in conservar:
+            continue
+        o.animation_data_clear()
+
+
+def animar_jugadores(E, T, total):
+    g = {i: b for i, b in enumerate(T)}
+    t0 = lambda i: g[i]["t0"]
+    t1 = lambda i: g[i]["t0"] + g[i]["dur"]
+    t_fin, t_gol, t_cab = E["t_fin"], E["t_gol"], E["t_cabeza"]
+    r0, r1, r2 = E["rivales"]
+    J = []
+    # rivales: corren hacia la portería mientras vuela el balón; se recolocan en la repetición
+    for partes, ini, dest, extra in ((r0, (2.6, -3.6), (1.0, -1.8), (4.0, -9.0)), (r1, (2.5, -7.5), (0.6, -4.6), (1.0, -12.0)), (r2, (-6.5, -8.5), (-3.4, -5.2), (-11.0, -3.0))):
+        J.append(dict(p=partes, ruta=ruta([(0, ini), (t0(0) + 1.0, ini), (t1(0), dest), (t0(4), dest), (t1(4) - 0.5, extra), (t0(6) - 0.01, extra), (t0(6), ini),
+                                             (t0(6) + 1.2, ini), (t_gol + 0.3, dest), (t1(7), dest)]), foco=(-1, -2)))
+    # compañero: se desmarca, salta a cabecear y celebra
+    comp = E["companero"]
+    J.append(dict(p=comp, ruta=ruta([(0, (-4.5, -9.0)), (t0(0) + 0.6, (-4.5, -9.0)), (t1(0), (-5.6, -2.8)), (t0(6) - 0.01, (-5.6, -2.8)), (t0(6), (-5.0, -9.5)),
+                                     (t_cab, (-3.2, -6.5)), (t_gol + 0.4, (-3.2, -6.5)), (t1(6) + 0.8, (-10.5, -3.0)), (t1(7), (-10.5, -3.0))]),
+                  foco=(-1, -2), salto=[(t_cab - 0.25, t_cab + 0.25, 0.55)], celebra=(t_gol + 0.3, total)))
+    # sacador: entra al campo tras el saque
+    sac = E["sacador"]
+    J.append(dict(p=sac, ruta=ruta([(0, (-15.6, -9)), (t0(0) + 1.4, (-15.6, -9)), (t1(0), (-12.0, -7.6)), (t0(6) - 0.01, (-12.0, -7.6)), (t0(6), (-15.6, -9)),
+                                    (t0(6) + 1.5, (-15.6, -9)), (t1(6) + 0.8, (-11.0, -3.6)), (t1(7), (-11.0, -3.6))]),
+                  foco=(-1, -2), sin_brazos=(0, t0(6) + 1.6), celebra=(t_gol + 0.8, total)))
+    # portero: sigue el balón y se estira
+    por = E["portero"]
+    J.append(dict(p=por, ruta=ruta([(0, (0, -0.9)), (t0(0) + 0.5, (0, -0.9)), (t_fin - 0.5, (-0.4, -0.9)), (t_fin, (-1.5, -0.9)), (t0(4), (-1.5, -0.9)),
+                                    (t0(4) + 1.4, (-2.2, -3.8)), (t1(5), (-0.5, -1.2)), (t0(6), (0, -0.9)), (t_gol - 0.4, (-0.3, -0.9)), (t_gol, (1.2, -0.9)), (total, (1.2, -0.9))]),
+                  foco=(-6, -8), estirada=[(t_fin - 0.35, 1, t0(3)), (t_gol - 0.3, -1, t1(6))]))
+    for j in J:
+        limpiar_anim(j["p"], conservar=("brazo_izq", "brazo_der") if j["p"] is sac else ())
+    n = int(total * FPS) + 1
+    for j in J:
+        P = j["p"]
+        fase, ang_prev = 0.0, None
+        prev = j["ruta"](0)
+        for f in range(n):
+            t = f / FPS
+            x, y = j["ruta"](t)
+            vx, vy = (x - prev[0]) * FPS, (y - prev[1]) * FPS
+            v = math.hypot(vx, vy)
+            prev = (x, y)
+            if v > 12:          # salto de posición (corte de cámara): no animar la carrera
+                v = 0
+            fase += v / FPS * 4.4
+            amp = min(1.0, v / 3.0)
+            if v > 0.6:
+                ang = math.atan2(vy, vx) - math.pi / 2
+            else:
+                ang = math.atan2(j["foco"][1] - y, j["foco"][0] - x) - math.pi / 2
+            if ang_prev is not None:
+                d = (ang - ang_prev + math.pi) % (2 * math.pi) - math.pi
+                ang = ang_prev + d * 0.25
+            ang_prev = ang
+            z = 0.02 * math.sin(t * 2 * math.pi * 0.6 + hash(id(P)) % 7) + abs(math.sin(fase)) * 0.06 * amp
+            tilt = 0.0
+            celebra = "celebra" in j and j["celebra"][0] <= t <= j["celebra"][1]
+            if celebra:
+                z += 0.35 * abs(math.sin((t - j["celebra"][0]) * 2 * math.pi * 1.4))
+            for a, b_, h in j.get("salto", []):
+                if a <= t <= b_:
+                    u = (t - a) / (b_ - a); z += h * 4 * u * (1 - u)
+            for (te, lado, tfin) in j.get("estirada", []):
+                if te <= t <= tfin:
+                    u = min(1, (t - te) / 0.3)
+                    tilt = lado * math.radians(75) * u
+                    z += 0.45 * 4 * min(u, 0.5) * (1 - min(u, 0.5)) if u < 1 else 0.2
+            P["root"].location = (x, y, z); P["root"].keyframe_insert("location", frame=f)
+            P["root"].rotation_euler = (0, tilt, ang); P["root"].keyframe_insert("rotation_euler", frame=f)
+            pierna = math.radians(38) * amp * math.sin(fase)
+            P["pierna_izq"].rotation_euler = (pierna, 0, 0); P["pierna_izq"].keyframe_insert("rotation_euler", frame=f)
+            P["pierna_der"].rotation_euler = (-pierna, 0, 0); P["pierna_der"].keyframe_insert("rotation_euler", frame=f)
+            sb = j.get("sin_brazos")
+            if sb and sb[0] <= t <= sb[1] and not celebra:
+                continue
+            if celebra:
+                br = math.radians(165) + 0.2 * math.sin(t * 9)
+                bi, bd = (br, 0, math.radians(15)), (br, 0, math.radians(-15))
+            elif tilt:
+                bi, bd = (math.radians(160), 0, 0), (math.radians(160), 0, 0)
+            else:
+                brazo = math.radians(32) * amp * math.sin(fase) + math.radians(4) * math.sin(t * 3.8)
+                bi, bd = (-brazo, 0, math.radians(6)), (brazo, 0, math.radians(-6))
+            P["brazo_izq"].rotation_euler = bi; P["brazo_izq"].keyframe_insert("rotation_euler", frame=f)
+            P["brazo_der"].rotation_euler = bd; P["brazo_der"].keyframe_insert("rotation_euler", frame=f)
 
 
 # ------------------------------------------------------------- montaje 2D (texto, marcador, etiquetas)
@@ -482,6 +588,7 @@ if __name__ == "__main__":
     print(f"[{SLUG}] {total:.1f}s", flush=True)
     E = construir(T_, total)
     animar(E, T_, total)
+    animar_jugadores(E, T_, total)
     frames = os.path.join(SALIDA, "frames"); os.makedirs(frames, exist_ok=True)
     sc = bpy.context.scene
     muestra = "--muestra" in sys.argv

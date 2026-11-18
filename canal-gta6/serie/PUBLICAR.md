@@ -16,6 +16,17 @@ Consejo: sube 1 al día a la misma hora y fija (pin) el 1 en tu perfil.
 | 9 | 27-que-pasa-si-caes-en-un-agujero-negro | ¿Qué te pasa si caes en un agujero negro? | #espacio #agujeronegro #ciencia #astronomia #parati |
 | 10 | 28-por-que-olvidas-al-cruzar-una-puerta | Por qué olvidas a qué ibas al cruzar una puerta 🚪 | #psicologia #cerebro #memoria #curiosidades #parati |
 
+## Extra: el chico que filtró GTA 6
+
+| Archivo (en `salida/`) | Título para poner | Descripción + hashtags |
+|---|---|---|
+| 30-el-chico-que-filtro-gta6 | El chico que filtró GTA 6 😳 | Lo hizo desde un hotel con la tele y un Fire Stick #gta6 #gtavi #rockstar #hacker #parati |
+
+Datos: filtración del 18 sep 2022 (unos 90 vídeos), Arion Kurtaj (17 años entonces, en libertad bajo fianza, alojado en
+un hotel), tele del hotel + móvil + Amazon Fire Stick, coste estimado de unos 5 millones de dólares, tráiler 1 filtrado
+y estrenado antes de tiempo (unos 90 millones de visitas en YouTube en 24 h), internamiento indefinido en un hospital
+de seguridad (dic. 2023).
+
 ## Fuentes y notas de los datos
 
 - **1. Portada de 2027**: los temas son los que aparecen escritos en la propia portada del especial anual de *The Economist*

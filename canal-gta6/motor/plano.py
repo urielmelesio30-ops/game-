@@ -15,7 +15,6 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import audio
-import doomsday  # noqa: F401  (registra la pronunciación de nombres de Marvel)
 
 audio.VELOCIDAD = 1.1
 AQUI = os.path.dirname(os.path.abspath(__file__))

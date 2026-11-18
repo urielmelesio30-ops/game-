@@ -749,7 +749,7 @@ def E_final(fondo_, parte, txt="SÍGUEME", siguiente=None):
         u = back(tl / 0.5)
         pegar(fr, escalar(A["masc"], 0.6 * max(0.05, u)), W / 2, 900 - 20 * abs(math.sin(tl * 4)))
         titulo(fr, txt, tl, RS, 160, 330)
-        pegar(fr, escalar(texto_grande(f"PARTE {parte}/10", AM, 100), max(0.05, back((tl - 0.3) / 0.35))), W / 2, 1230)
+        pegar(fr, escalar(texto_grande(f"PARTE {parte}/10" if parte else "SÍGUEME PARA MÁS", AM, 100 if parte else 90), max(0.05, back((tl - 0.3) / 0.35))), W / 2, 1230)
         Hm.confeti(fr, tl, n=60)
     return f
 

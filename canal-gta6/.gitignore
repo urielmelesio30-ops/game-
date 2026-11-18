@@ -1,0 +1,8 @@
+salida/**/*.mp4
+salida/**/*_preview*
+salida/**/*.wav
+.cache_voz/
+__pycache__/
+
+# fotogramas intermedios del render 3D
+salida/**/frames/

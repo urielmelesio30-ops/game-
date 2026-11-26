@@ -27,3 +27,11 @@ Te explico de todo en 30 segundos 👾
 📅 Un vídeo nuevo cada día
 👇 Dime qué tema quieres que explique
 ```
+
+## Vídeo 38 · Blackjack y el equipo del MIT
+`38-blackjack-y-el-equipo-del-mit.mp4` · súbelo a las **20:00**, con su `portada.png`.
+
+- **Instagram:** Ganaron millones al blackjack… sin hacer trampa 🃏 ¿Te atreverías a contar cartas? 👇
+  #blackjack #mit #casino #sabiasque #curiosidades
+- **TikTok:** Cómo unos alumnos del MIT ganaron millones al 21 🃏 ¿Te atreverías? 👇
+  #blackjack #21 #mit #parati #fyp

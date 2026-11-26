@@ -35,3 +35,11 @@ Te explico de todo en 30 segundos 👾
   #blackjack #mit #casino #sabiasque #curiosidades
 - **TikTok:** Cómo unos alumnos del MIT ganaron millones al 21 🃏 ¿Te atreverías? 👇
   #blackjack #21 #mit #parati #fyp
+
+## Vídeo 40 · ¿Cómo cuenta células un equipo de hematología? (2D)
+`40-como-cuenta-celulas-hematologia-2d.mp4` · súbelo a las **20:00**, con su `portada.png`.
+
+- **TikTok:** ¿Cómo cuenta tus células un equipo de hematología? 🩸 Un pulso = una célula 🔬
+  #hematologia #laboratorioclinico #biometriahematica #quimicofarmacobiologo #parati
+- **Instagram:** Un pulso = una célula 🩸 Así cuenta tus células un equipo de hematología 🔬 ¿Lo sabías? 👇
+  #hematologia #laboratorioclinico #biometriahematica #medicina #ciencia

@@ -165,7 +165,7 @@ class Escenas:
     def __init__(self, T, total):
         self.T, self.total = T, total
         t0 = lambda i: T[i]["t0"]; d = lambda i: T[i]["dur"]
-        self.opt0 = [("rojo", 0.0), ("rojo", d(0) * 0.4), ("blanco", d(0) * 0.75)]
+        self.opt0 = [("rojo", -0.15), ("rojo", d(0) * 0.4), ("blanco", d(0) * 0.75)]
         self.opt3 = [("neutro", t0(3) + d(3) * 0.18), ("linfo", t0(3) + d(3) * 0.42), ("mono", t0(3) + d(3) * 0.66), ("rojo", t0(3) + d(3) * 0.86)]
         self.imp = [("rojo", t0(1) + d(1) * 0.3), ("rojo", t0(1) + d(1) * 0.55), ("plaqueta", t0(1) + d(1) * 0.8),
                     ("plaqueta", t0(2) + d(2) * 0.15), ("rojo", t0(2) + d(2) * 0.32), ("blanco", t0(2) + d(2) * 0.55)]
@@ -193,7 +193,7 @@ class Escenas:
     # --- óptico (0, 3) y alarma (10)
     def optico(self, d, t, lista, rayo=(255, 232, 110), alarma=False):
         fondo(d, (196, 226, 246), (160, 200, 236))
-        grafica(d, [(max(0, tc), ti) for ti, tc in lista], t)
+        grafica(d, [(tc, ti) for ti, tc in lista], t)
         d.rect(40, 1290, 1040, 1400, (126, 178, 232))
         d.rect(40, 1270, 1040, 1295, (98, 150, 214), r=10)
         d.rect(40, 1395, 1040, 1420, (98, 150, 214), r=10)
@@ -469,14 +469,17 @@ def montar(T, total, muestra=False):
     for fi in cuadros:
         tg = fi / FPS
         kb = max([i for i, b in enumerate(T) if b["t0"] <= tg], default=0)
-        b = T[kb]; tl = tg - b["t0"]
+        b = T[kb]; tl = max(0.0, tg - b["t0"])
         im = E.dibujar(fi, kb)
-        z = 1 + 0.035 * tl / b["dur"] + (0.05 * (1 - ease(tl / 0.2)) if kb else 0)    # acercamiento lento + «pop» al cambiar
+        z = 1 + 0.035 * max(0.0, tl) / b["dur"] + (0.05 * (1 - ease(tl / 0.2)) if kb else 0)    # acercamiento lento + «pop» al cambiar
         cw, ch = W * S / z, H * S / z
         sx = sy = 0
         if any(0 <= tg - g < 0.3 for g in golpes):
             r = np.random.default_rng(fi); sx, sy = r.integers(-28, 29), r.integers(-28, 29)
-        x0, y0 = (W * S - cw) / 2 + sx, (H * S - ch) / 2 + sy
+        if sx or sy:                       # sacudida: recorta un poco más para no salirse
+            cw, ch = cw / 1.04, ch / 1.04
+        x0 = min(max(0, (W * S - cw) / 2 + sx), W * S - cw)
+        y0 = min(max(0, (H * S - ch) / 2 + sy), H * S - ch)
         fr = im.resize((W, H), Image.LANCZOS, box=(x0, y0, x0 + cw, y0 + ch)).convert("RGBA")
         if kb == 10 and tg > E.tg and int((tg - E.tg) / 0.2) % 2 == 0:
             fr.alpha_composite(borde)

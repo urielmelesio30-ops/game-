@@ -649,6 +649,10 @@ def montar(T, total, frames_dir, muestra=False):
     if muestra:
         return
     ff.stdin.close(); ff.wait()
+    audio_final(T, total, mp4)
+
+
+def audio_final(T, total, mp4, SALIDA=SALIDA, SLUG=SLUG, PULSOS=PULSOS):
     sr = audio.MUS_SR
     voz = np.zeros(int(total * audio.VOZ_SR) + 100, np.float32)
     for b in T:

@@ -1,0 +1,6 @@
+Así funciona por dentro un analizador de hematología. Primero, una aguja aspira del tubo apenas unos microlitros de sangre.
+La muestra se diluye y se reparte en canales separados, uno para cada tipo de medición.
+Los glóbulos rojos y las plaquetas pasan uno por uno por una abertura diminuta con corriente eléctrica. Cada célula genera un pulso, y el tamaño del pulso indica el tamaño de la célula.
+En otro canal, un reactivo rompe los glóbulos rojos y libera la hemoglobina. Una luz atraviesa la mezcla, y según cuánta luz se absorbe, se calcula la hemoglobina.
+En muchos analizadores, los glóbulos blancos pasan en fila frente a un láser. La luz que dispersan revela su tamaño y su interior, y así se separan en neutrófilos, linfocitos, monocitos, eosinófilos y basófilos.
+En alrededor de un minuto, el equipo entrega la biometría hemática completa.

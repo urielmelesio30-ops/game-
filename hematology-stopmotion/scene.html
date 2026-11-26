@@ -1,0 +1,339 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>html,body{margin:0;background:#000;overflow:hidden}canvas{display:block}</style>
+<script type="importmap">
+{"imports":{"three":"./node_modules/three/build/three.module.js","three/addons/":"./node_modules/three/examples/jsm/"}}
+</script>
+</head><body>
+<script type="module">
+import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { BokehPass } from 'three/addons/postprocessing/BokehPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+const W = 1280, H = 720, FPS = 12, DURATION = 10;
+const params = new URLSearchParams(location.search);
+const PR = parseFloat(params.get('pr') || '1');
+
+// ---------- utils ----------
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const lerp=(a,b,t)=>a+(b-a)*t;
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const ease=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+function noise3(x,y,z,s){ // cheap organic noise from sines
+  return (Math.sin(x*1.7+s)*Math.cos(y*2.3+s*1.3)+Math.sin(y*1.1+z*1.9+s*.7)*.6+Math.cos(z*2.7+x*.9+s*2.1)*.5+Math.sin((x+y+z)*3.1+s)*.25)/2.35;
+}
+function lumpify(geom, amp, freq, seed){
+  const p=geom.attributes.position, v=new THREE.Vector3();
+  geom.computeBoundingBox(); const c=new THREE.Vector3(); geom.boundingBox.getCenter(c);
+  for(let i=0;i<p.count;i++){
+    v.fromBufferAttribute(p,i);
+    const d=v.clone().sub(c); const len=d.length()||1; d.divideScalar(len);
+    const n=noise3(v.x*freq,v.y*freq,v.z*freq,seed);
+    v.addScaledVector(d,n*amp);
+    p.setXYZ(i,v.x,v.y,v.z);
+  }
+  geom.computeVertexNormals();
+  return geom;
+}
+
+// ---------- clay bump texture (fingerprints + dimples) ----------
+function makeClayBump(seed){
+  const cv=document.createElement('canvas'); cv.width=cv.height=1024;
+  const g=cv.getContext('2d'); const r=mulberry32(seed);
+  g.fillStyle='#808080'; g.fillRect(0,0,1024,1024);
+  for(let i=0;i<2600;i++){ // dimples & lumps
+    const x=r()*1024,y=r()*1024,s=2+r()*14,l=r()<.5?0:255;
+    const grd=g.createRadialGradient(x,y,0,x,y,s);
+    grd.addColorStop(0,`rgba(${l},${l},${l},${.05+r()*.08})`);grd.addColorStop(1,'rgba(128,128,128,0)');
+    g.fillStyle=grd; g.beginPath(); g.arc(x,y,s,0,7); g.fill();
+  }
+  for(let f=0;f<9;f++){ // fingerprint whorls
+    const cx=r()*1024,cy=r()*1024,rot=r()*Math.PI,sx=.6+r()*.5;
+    g.save(); g.translate(cx,cy); g.rotate(rot); g.scale(1,sx);
+    for(let k=4;k<70;k+=4.2){
+      g.strokeStyle=`rgba(${r()<.5?60:200},${r()<.5?60:200},${r()<.5?60:200},.10)`;
+      g.lineWidth=1.6; g.beginPath();
+      const a0=r()*1.2, a1=a0+Math.PI*(1.1+r()*.8);
+      g.ellipse(0,0,k*1.25,k,0,a0,a1); g.stroke();
+    }
+    g.restore();
+  }
+  for(let i=0;i<40;i++){ // tool smears
+    g.strokeStyle=`rgba(${r()<.5?90:170},${r()<.5?90:170},${r()<.5?90:170},.12)`;
+    g.lineWidth=1+r()*3; g.beginPath(); const x=r()*1024,y=r()*1024;
+    g.moveTo(x,y); g.quadraticCurveTo(x+r()*80-40,y+r()*80-40,x+r()*160-80,y+r()*160-80); g.stroke();
+  }
+  const t=new THREE.CanvasTexture(cv); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
+}
+const bumpA=makeClayBump(11), bumpB=makeClayBump(23);
+function clay(color, opts={}){
+  const m=new THREE.MeshStandardMaterial({color, roughness:opts.rough??.86, metalness:0, bumpMap:opts.bump??bumpA, bumpScale:opts.bumpScale??5, ...opts.extra});
+  return m;
+}
+
+// ---------- renderer / scene ----------
+const renderer=new THREE.WebGLRenderer({antialias:true, preserveDrawingBuffer:true});
+renderer.setPixelRatio(PR); renderer.setSize(W,H);
+renderer.shadowMap.enabled=true; renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.05;
+document.body.appendChild(renderer.domElement);
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color('#5a3f2e');
+const camera=new THREE.PerspectiveCamera(32,W/H,.1,200);
+camera.position.set(0.8,6.0,17.6); camera.lookAt(0.7,3.1,1.4);
+
+// lights
+const hemi=new THREE.HemisphereLight('#fff0dc','#a7745a',.85); scene.add(hemi);
+const key=new THREE.DirectionalLight('#ffdcb4',2.5); key.position.set(-7,12,9);
+key.castShadow=true; key.shadow.mapSize.set(2048,2048);
+Object.assign(key.shadow.camera,{left:-12,right:12,top:12,bottom:-12,near:1,far:40}); key.shadow.bias=-.0004; key.shadow.normalBias=.02;
+key.shadow.radius=4; scene.add(key);
+const fill=new THREE.PointLight('#ffc89a',18,40,1.6); fill.position.set(9,6,8); scene.add(fill);
+const rim=new THREE.PointLight('#ffe7c4',14,40,1.6); rim.position.set(-2,8,-7); scene.add(rim);
+
+const jitterables=[]; // objects that get per-frame stop-motion jitter
+function jit(o,amt=1){o.userData.base={p:o.position.clone(),r:o.rotation.clone()};o.userData.jamt=amt;jitterables.push(o);return o;}
+function addMesh(geo,mat,pos,parent=scene){const m=new THREE.Mesh(geo,mat);m.position.copy(pos);m.castShadow=m.receiveShadow=true;parent.add(m);return m;}
+
+// tabletop
+const tableTex=bumpB.clone(); tableTex.repeat.set(5,5); tableTex.needsUpdate=true;
+const table=addMesh(lumpify(new THREE.PlaneGeometry(60,40,120,80).rotateX(-Math.PI/2),.025,1.3,3), clay('#d4a27c',{bump:tableTex,bumpScale:7,rough:.95}), new THREE.Vector3(1,0,0));
+table.castShadow=false;
+// back wall (out of focus)
+const wallCv=document.createElement('canvas');wallCv.width=512;wallCv.height=256;{const g=wallCv.getContext('2d');const gr=g.createLinearGradient(0,0,512,0);gr.addColorStop(0,'#9a6c50');gr.addColorStop(.45,'#e6c39f');gr.addColorStop(1,'#8f6248');g.fillStyle=gr;g.fillRect(0,0,512,256);}
+const wall=addMesh(new THREE.PlaneGeometry(70,30),new THREE.MeshStandardMaterial({map:new THREE.CanvasTexture(wallCv),roughness:1}),new THREE.Vector3(1,10,-12));
+wall.material.map.colorSpace=THREE.SRGBColorSpace;
+
+// ---------- analyzer ----------
+const AN={x:1.5,w:6.2,h:4.5,d:4};
+const analyzer=new THREE.Group(); scene.add(analyzer);
+addMesh(lumpify(new RoundedBoxGeometry(AN.w,AN.h,AN.d,10,.45),.06,1.4,5), clay('#a9d6c3'), new THREE.Vector3(AN.x,AN.h/2,0), analyzer);
+// off-white top panel
+addMesh(lumpify(new RoundedBoxGeometry(AN.w-.5,.22,AN.d-.5,4,.1),.02,2,6), clay('#f1eadb'), new THREE.Vector3(AN.x,AN.h+.04,0), analyzer);
+// screen bezel + screen
+addMesh(lumpify(new RoundedBoxGeometry(3.1,1.95,.3,4,.12),.015,3,7), clay('#e9e1cf'), new THREE.Vector3(.45,3.15,2.0), analyzer);
+const scrCv=document.createElement('canvas');scrCv.width=320;scrCv.height=190;const scrG=scrCv.getContext('2d');
+const scrTex=new THREE.CanvasTexture(scrCv); scrTex.colorSpace=THREE.SRGBColorSpace;
+const screen=addMesh(new THREE.PlaneGeometry(2.65,1.55),new THREE.MeshBasicMaterial({map:scrTex,toneMapped:false}),new THREE.Vector3(.45,3.15,2.16),analyzer);
+screen.castShadow=false;
+// buttons
+const btnCols=['#f2b5a8','#f1eadb','#f6d08a'];
+for(let i=0;i<3;i++){const b=addMesh(lumpify(new THREE.CylinderGeometry(.2,.22,.18,20).rotateX(Math.PI/2),.015,5,20+i),clay(btnCols[i]),new THREE.Vector3(2.75+i*.6,2.55,2.05),analyzer);jit(b,.6);}
+// LED
+const ledMat=new THREE.MeshStandardMaterial({color:'#3a4a3a',emissive:'#000000',roughness:.4});
+const led=addMesh(new THREE.SphereGeometry(.16,20,14),ledMat,new THREE.Vector3(3.95,3.75,2.08),analyzer);
+const ledLight=new THREE.PointLight('#5dff7a',0,4,2); ledLight.position.set(3.95,3.75,2.5); analyzer.add(ledLight);
+// sample slot on top
+const SLOT=new THREE.Vector3(-.35,AN.h+.15,.55);
+addMesh(lumpify(new THREE.TorusGeometry(.46,.11,12,32).rotateX(Math.PI/2),.012,5,31),clay('#8cc2ad'),SLOT.clone().setY(AN.h+.17),analyzer);
+addMesh(new THREE.CircleGeometry(.42,28).rotateX(-Math.PI/2),new THREE.MeshStandardMaterial({color:'#1d1512',roughness:1}),SLOT.clone().setY(AN.h+.165),analyzer);
+// chamber tray
+addMesh(lumpify(new RoundedBoxGeometry(5.6,.32,2.1,4,.12),.02,2,8),clay('#9acbb6'),new THREE.Vector3(AN.x+.15,.16,3.0),analyzer);
+const CUPX=[0.0,1.65,3.3], CUPZ=3.05, CUPY=.32, CUPH=.68, CUPR=.62;
+const cupCols=['#ff8a8a','#d9c2ff','#c58bff'];
+const cups=[];
+for(let i=0;i<3;i++){
+  const wallM=new THREE.MeshStandardMaterial({color:cupCols[i],emissive:cupCols[i],emissiveIntensity:.15,transparent:true,opacity:.42,roughness:.25,depthWrite:false,side:THREE.DoubleSide});
+  const w=new THREE.Mesh(new THREE.CylinderGeometry(CUPR,CUPR*.92,CUPH,32,1,true),wallM); w.position.set(CUPX[i],CUPY+CUPH/2,CUPZ); analyzer.add(w);
+  addMesh(lumpify(new THREE.TorusGeometry(CUPR,.07,10,36).rotateX(Math.PI/2),.01,6,40+i),clay('#f1eadb'),new THREE.Vector3(CUPX[i],CUPY+CUPH,CUPZ),analyzer);
+  const base=addMesh(new THREE.CylinderGeometry(CUPR*.92,CUPR*.92,.06,32),new THREE.MeshStandardMaterial({color:cupCols[i],emissive:cupCols[i],emissiveIntensity:.2,roughness:.5}),new THREE.Vector3(CUPX[i],CUPY+.03,CUPZ),analyzer);
+  const pl=new THREE.PointLight(cupCols[i],0,3.2,2); pl.position.set(CUPX[i],CUPY+.5,CUPZ); analyzer.add(pl);
+  cups.push({wallM,baseM:base.material,pl});
+}
+
+// sample rack (right) with two spare tubes
+const rack=new THREE.Group(); rack.position.set(6.4,0,.6); scene.add(rack);
+addMesh(lumpify(new RoundedBoxGeometry(1.5,.9,2.6,4,.12),.02,3,50),clay('#f1eadb'),new THREE.Vector3(0,.45,0),rack);
+function makeTube(capCol, fill=true){
+  const g=new THREE.Group();
+  const glass=new THREE.Mesh(new THREE.CylinderGeometry(.3,.3,2.25,24,1,true),new THREE.MeshStandardMaterial({color:'#fffaf2',transparent:true,opacity:.3,roughness:.15,depthWrite:false,side:THREE.DoubleSide}));
+  glass.position.y=1.25; g.add(glass);
+  const bot=new THREE.Mesh(new THREE.SphereGeometry(.3,24,12,0,Math.PI*2,Math.PI/2,Math.PI/2),glass.material); bot.position.y=.3; g.add(bot);
+  if(fill){const b=new THREE.Mesh(lumpify(new THREE.CapsuleGeometry(.25,1.15,8,20),.015,6,61),clay('#b81e2c',{rough:.5}));b.position.y=.92;b.castShadow=true;g.add(b);}
+  const cap=new THREE.Mesh(lumpify(new RoundedBoxGeometry(.72,.55,.72,4,.2),.02,5,62),clay(capCol)); cap.position.y=2.55; cap.castShadow=true; g.add(cap);
+  g.traverse(o=>{if(o.isMesh)o.receiveShadow=true});
+  return g;
+}
+for(const [i,c] of [['#7d6bd6',-.6],['#e2a04a',.6]].entries()){}
+const t1=makeTube('#7d6bd6',false); t1.position.set(0,.55,-.55); t1.scale.setScalar(.85); rack.add(t1); jit(t1,.6);
+const t2=makeTube('#e2a04a',false); t2.position.set(0,.55,.6); t2.scale.setScalar(.85); rack.add(t2); jit(t2,.6);
+
+// background props (blurred)
+const beaker=new THREE.Mesh(new THREE.CylinderGeometry(1.1,1.1,2.4,32,1,true),new THREE.MeshStandardMaterial({color:'#fff6ea',transparent:true,opacity:.35,roughness:.2,depthWrite:false,side:THREE.DoubleSide}));
+beaker.position.set(-7,1.2,-4.5); scene.add(beaker);
+addMesh(new THREE.CylinderGeometry(1.0,1.0,1.1,32),clay('#7ec0d8',{rough:.4}),new THREE.Vector3(-7,.56,-4.5));
+for(let i=0;i<3;i++) addMesh(lumpify(new THREE.CylinderGeometry(1.2,1.2,.22,32),.01,3,70+i),clay(i===1?'#f5d9c8':'#f1eadb'),new THREE.Vector3(8.6,.12+i*.24,-4.2));
+addMesh(lumpify(new THREE.SphereGeometry(1.2,24,16),.12,2,80),clay('#7fae6b'),new THREE.Vector3(-3.5,1.0,-7.5));
+addMesh(lumpify(new THREE.CylinderGeometry(.9,.7,1.2,20),.03,3,81),clay('#c46f47'),new THREE.Vector3(-3.5,.0,-7.5));
+
+// ---------- the blood tube ----------
+const tube=makeTube('#c7302f',true); scene.add(tube);
+const TUBE_SCALE=.9; tube.scale.setScalar(TUBE_SCALE);
+
+// ---------- cells ----------
+function rbcGeom(seed){
+  const R=.34,pts=[],N=18;
+  const h=r=>{const q=r/R;return Math.sqrt(Math.max(0,1-q*q))*(.055+.17*q*q)+.008;};
+  for(let i=0;i<=N;i++){const r=R*i/N;pts.push(new THREE.Vector2(r,h(r)));}
+  for(let i=N;i>=0;i--){const r=R*i/N;pts.push(new THREE.Vector2(r,-h(r)));}
+  return lumpify(new THREE.LatheGeometry(pts,36),.012,7,seed);
+}
+const events=[]; // for audio
+const cells=[];
+const rnd=mulberry32(777);
+const groups=[
+  {type:'rbc',n:6,cup:0,start:[[-3.9,4.1],[-3.3,5.0],[-2.6,3.9],[-2.0,4.8],[-1.5,3.8],[-2.9,5.7]],t0:4.35},
+  {type:'wbc',n:3,cup:1,start:[[0.4,5.2],[1.3,5.8],[2.3,5.1]],t0:4.6},
+  {type:'plt',n:6,cup:2,start:[[3.4,4.6],[3.9,5.4],[4.4,4.5],[4.9,5.2],[3.6,6.0],[4.6,6.1]],t0:4.85},
+];
+for(const gr of groups){
+  gr.start.forEach(([x,z],k)=>{
+    let mesh, restY, mat;
+    if(gr.type==='rbc'){mat=clay('#c8343b',{rough:.7});mesh=new THREE.Mesh(rbcGeom(100+k),mat);restY=.17;}
+    else if(gr.type==='wbc'){mat=clay('#e1d4ef');mesh=new THREE.Mesh(lumpify(new THREE.IcosahedronGeometry(.3,4),.05,7,200+k),mat);restY=.3;
+      const nuc=new THREE.Mesh(lumpify(new THREE.SphereGeometry(.13,16,12),.03,9,260+k),clay('#9a6fc4')); nuc.position.set(.08,.2,.14); nuc.scale.set(1.2,.5,1); mesh.add(nuc);}
+    else {mat=clay('#8b55b8');mesh=new THREE.Mesh(lumpify(new THREE.IcosahedronGeometry(.16,2),.04,9,300+k),mat);mesh.scale.set(1,.55,.85);restY=.09;}
+    mesh.castShadow=mesh.receiveShadow=true; scene.add(mesh);
+    // schedule: hops to pre-cup point, then into cup
+    const cupX=CUPX[gr.cup]+AN.x-AN.x; // cups are in analyzer group with analyzer at origin
+    const pre=new THREE.Vector3(cupX+(rnd()-.5)*.5,restY,4.55+(rnd())*.25);
+    const startP=new THREE.Vector3(x,restY,z);
+    const dist=startP.distanceTo(pre); const nh=Math.max(2,Math.round(dist/.7));
+    const hopDur=gr.type==='plt'?.25:gr.type==='wbc'?.42:.33;
+    let t=gr.t0+k*.14;
+    const segs=[];
+    for(let i=0;i<nh;i++){
+      const a=startP.clone().lerp(pre,i/nh), b=startP.clone().lerp(pre,(i+1)/nh);
+      segs.push({t0:t,dur:hopDur,a,b,h:gr.type==='plt'?.18:gr.type==='wbc'?.22:.26}); t+=hopDur+.02;
+    }
+    // final hop into cup
+    const ang=k*(Math.PI*2/gr.n)+.4, rr=gr.type==='wbc'?.27:.24;
+    const layer=gr.type==='wbc'?0:(k>=3?1:0);
+    const fy=CUPY+.06+(gr.type==='rbc'?.07+layer*.16:gr.type==='wbc'?.27:.06+layer*.12);
+    const fin=new THREE.Vector3(cupX+Math.cos(ang)*rr,fy,CUPZ+Math.sin(ang)*rr);
+    segs.push({t0:t+.05,dur:.5,a:pre.clone(),b:fin,h:1.35,final:true});
+    const endT=t+.55;
+    segs.forEach(s=>events.push({t:s.t0+s.dur,kind:s.final?'cup':'cellhop',type:gr.type}));
+    const restRot=new THREE.Euler((rnd()-.5)*.5,rnd()*6,(rnd()-.5)*.5);
+    const finRot=new THREE.Euler((rnd()-.5)*.9,rnd()*6,(rnd()-.5)*.9);
+    cells.push({mesh,segs,startP,restRot,finRot,type:gr.type,cup:gr.cup,endT});
+  });
+}
+const lastArrival=Math.max(...cells.map(c=>c.endT));
+
+// tube schedule
+const TUBE_START=new THREE.Vector3(-5.3,0,2.4), TUBE_SIDE=new THREE.Vector3(-2.75,0,1.7);
+const tubeSegs=[]; {
+  let t=.35; const n=5;
+  for(let i=0;i<n;i++){tubeSegs.push({t0:t,dur:.3,a:TUBE_START.clone().lerp(TUBE_SIDE,i/n),b:TUBE_START.clone().lerp(TUBE_SIDE,(i+1)/n),h:.45});t+=.33;}
+  const above=new THREE.Vector3(SLOT.x,AN.h+.2,SLOT.z);
+  // climb up beside the box in stepped lifts, then hop across to the slot (stays in frame)
+  const ledge=new THREE.Vector3(-2.3,AN.h+.22,1.0);
+  tubeSegs.push({t0:t+.1,dur:.5,a:TUBE_SIDE.clone(),b:ledge,h:0,climb:true});
+  tubeSegs.push({t0:t+.62,dur:.38,a:ledge.clone(),b:above,h:.12,big:true}); t+=1.05;
+  // stepped descent into the slot
+  const depth=2.0; const steps=6;
+  for(let i=0;i<steps;i++){tubeSegs.push({t0:t+.1+i*.2,dur:.1,a:above.clone().setY(above.y-depth*i/steps),b:above.clone().setY(above.y-depth*(i+1)/steps),h:0,descent:true});}
+  tubeSegs.forEach(s=>events.push({t:s.t0+s.dur,kind:s.descent?'descent':s.big?'tubebig':'tubehop'}));
+  events.push({t:tubeSegs.find(s=>s.descent).t0,kind:'whir_start'});
+  events.push({t:tubeSegs[tubeSegs.length-1].t0+.1,kind:'whir_end'});
+}
+const TUBE_IN=tubeSegs[tubeSegs.length-1].t0+.1;
+const PROC_END=lastArrival+.15;
+const FLASH=[PROC_END+.35,PROC_END+.95], STEADY=PROC_END+1.55;
+FLASH.forEach(t=>events.push({t,kind:'blip'})); events.push({t:STEADY,kind:'chime'});
+events.push({t:TUBE_IN,kind:'tube_in'}); events.push({t:PROC_END,kind:'proc_end'});
+
+function evalSegs(segs,t,rest){
+  if(t<segs[0].t0) return {p:rest.clone(),air:0,seg:-1};
+  for(let i=0;i<segs.length;i++){const s=segs[i];
+    if(t<s.t0) return {p:segs[i-1].b.clone(),air:0,seg:i-1,landed:t-(segs[i-1].t0+segs[i-1].dur)};
+    if(t<=s.t0+s.dur){const u=(t-s.t0)/s.dur;const p=s.a.clone().lerp(s.b,s.descent?u:ease(u));p.y+=4*s.h*u*(1-u);return {p,air:u,seg:i,s};}
+  }
+  const l=segs[segs.length-1];return {p:l.b.clone(),air:0,seg:segs.length,landed:t-(l.t0+l.dur)};
+}
+
+// ---------- post ----------
+const rt=new THREE.WebGLRenderTarget(W*PR,H*PR,{samples:4,type:THREE.HalfFloatType});
+const composer=new EffectComposer(renderer,rt); composer.setPixelRatio(PR); composer.setSize(W,H);
+composer.addPass(new RenderPass(scene,camera));
+const bloom=new UnrealBloomPass(new THREE.Vector2(W,H),.32,.6,.88); composer.addPass(bloom);
+const bokeh=new BokehPass(scene,camera,{focus:16.0,aperture:.0010,maxblur:.009}); composer.addPass(bokeh);
+composer.addPass(new OutputPass());
+
+// ---------- screen drawing ----------
+function drawScreen(t,fr){
+  const g=scrG; g.fillStyle='#163a3a'; g.fillRect(0,0,320,190);
+  g.fillStyle='rgba(120,220,200,.08)'; for(let y=0;y<190;y+=6) g.fillRect(0,y,320,2);
+  if(t<TUBE_IN){ // idle: soft pulsing dot
+    const on=(fr%8)<5; g.fillStyle=on?'#6fe0c4':'#2f6f63'; g.beginPath(); g.arc(160,95,10,0,7); g.fill();
+  } else if(t<PROC_END){ // processing: three stepping dots + chasing segments
+    for(let i=0;i<3;i++){const on=((fr>>1)%3)===i; g.fillStyle=on?'#8ff0d6':'#2f6f63'; g.beginPath(); g.arc(120+i*40,80,on?13:10,0,7); g.fill();}
+    const prog=clamp((t-TUBE_IN)/(PROC_END-TUBE_IN),0,1); const steps=Math.floor(prog*10);
+    for(let i=0;i<10;i++){g.fillStyle=i<steps?'#8ff0d6':'#24534c'; g.fillRect(60+i*20,130,15,14);}
+  } else { // results: bars rising step by step
+    const u=clamp((t-PROC_END)/1.0,0,1); const st=Math.floor(u*6)/6;
+    const bars=[[.82,'#ff7a7a'],[.5,'#dcc8ff'],[.66,'#c58bff']];
+    bars.forEach(([hgt,c],i)=>{const bh=hgt*120*st; g.fillStyle=c; const x=70+i*70; g.fillRect(x,165-bh,44,bh); g.fillStyle='rgba(255,255,255,.25)'; g.fillRect(x,165-bh,44,5);});
+    g.fillStyle='#8ff0d6'; g.fillRect(55,166,210,4);
+  }
+  scrTex.needsUpdate=true;
+}
+
+// ---------- frame ----------
+function renderAt(fr){
+  const t=fr/FPS; const jr=mulberry32(fr*7919+13);
+  // tube
+  const te=evalSegs(tubeSegs,t,TUBE_START);
+  tube.position.copy(te.p);
+  let sy=1, sxz=1, tilt=0;
+  if(te.s && !te.s.descent && !te.s.climb && !te.s.big){sy=1+.12*Math.sin(te.air*Math.PI); sxz=1-.05*Math.sin(te.air*Math.PI); tilt=(te.s.b.x-te.s.a.x>0?-1:1)*.22*Math.sin(te.air*Math.PI);}
+  else if(te.landed!==undefined && te.landed<.09 && te.seg>=0 && !(tubeSegs[te.seg]||{}).descent){sy=.88;sxz=1.06;}
+  tube.scale.set(TUBE_SCALE*sxz,TUBE_SCALE*sy,TUBE_SCALE*sxz); tube.rotation.set(0,.3,tilt);
+  tube.position.x+=(jr()-.5)*.012; tube.position.z+=(jr()-.5)*.012; tube.rotation.y+=(jr()-.5)*.02;
+  // cells
+  const arrived=[0,0,0], totals=[6,3,6];
+  for(const c of cells){
+    const e=evalSegs(c.segs,t,c.startP); c.mesh.position.copy(e.p);
+    const done=e.seg>=c.segs.length; if(done) arrived[c.cup]++;
+    const r = done? c.finRot : c.restRot;
+    c.mesh.rotation.copy(r);
+    if(e.s){c.mesh.rotation.y+=e.air*1.3; c.mesh.rotation.x+=Math.sin(e.air*Math.PI)*.4;}
+    else if(e.seg>=0 && !done){c.mesh.rotation.y+=e.seg*.5;}
+    const base=c.type==='plt'?[1,.55,.85]:[1,1,1];
+    let sq=1; if(e.landed!==undefined&&e.landed<.09&&e.seg>=0) sq=.8;
+    c.mesh.scale.set(base[0]*(2-sq)*.5+base[0]*.5,base[1]*sq,base[2]*(2-sq)*.5+base[2]*.5);
+    c.mesh.position.x+=(jr()-.5)*.012; c.mesh.position.z+=(jr()-.5)*.012; c.mesh.rotation.z+=(jr()-.5)*.04;
+  }
+  // chambers glow
+  cups.forEach((cp,i)=>{
+    const f=arrived[i]/totals[i]; const active=t>=TUBE_IN?1:0;
+    const pulse = t>PROC_END ? 1 : .85+.15*((fr%4)<2?1:0);
+    cp.wallM.emissiveIntensity=(.12+active*.25+f*.9)*pulse; cp.baseM.emissiveIntensity=(.2+active*.4+f*1.4)*pulse;
+    cp.pl.intensity=(active*.6+f*3.2)*pulse;
+  });
+  // LED
+  let ledCol=null, li=0;
+  if(t>=TUBE_IN && t<PROC_END){ if((fr%12)<6){ledCol='#ffb340';li=1.4;} }
+  for(const f of FLASH) if(t>=f&&t<f+.26){ledCol='#5dff7a';li=3;}
+  if(t>=STEADY){ledCol='#5dff7a';li=2.2;}
+  if(ledCol){ledMat.color.set(ledCol);ledMat.emissive.set(ledCol);ledMat.emissiveIntensity=li;ledLight.color.set(ledCol);ledLight.intensity=li*1.1;}
+  else{ledMat.color.set('#3a4a3a');ledMat.emissive.set('#000');ledLight.intensity=0;}
+  drawScreen(t,fr);
+  // stop-motion boil: jitter props, lights, clay texture
+  for(const o of jitterables){const b=o.userData.base,a=o.userData.jamt;o.position.set(b.p.x+(jr()-.5)*.01*a,b.p.y,b.p.z+(jr()-.5)*.01*a);o.rotation.set(b.r.x,b.r.y+(jr()-.5)*.03*a,b.r.z);}
+  analyzer.position.x=(jr()-.5)*.006; analyzer.rotation.y=(jr()-.5)*.003;
+  key.intensity=2.5*(1+(jr()-.5)*.035); hemi.intensity=.85*(1+(jr()-.5)*.03);
+  bumpA.offset.set(jr()*.004,jr()*.004);
+  composer.render();
+  return renderer.domElement.toDataURL('image/png');
+}
+window.renderAt=renderAt;
+window.timeline={events,FPS,DURATION,TUBE_IN,PROC_END,FLASH,STEADY};
+window.ready=true;
+</script></body></html>
